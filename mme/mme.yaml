@@ -34,8 +34,6 @@ mme:
 #                mcc: MCC
 #                mnc: MNC
 #              lac: 1
-    s6a:
-        server: PYHSS_IP
     gummei: 
       - plmn_id:
           mcc: MCC
@@ -61,9 +59,4 @@ mme:
       enabled: True
       allowed_states: [ WHITELIST, BLACKLIST, GREYLIST ]
     time:
-      t3410: 8
       t3412: 540
-      t3422: 15
-      t3450: 12
-      t3460: 12
-      t3470: 12
