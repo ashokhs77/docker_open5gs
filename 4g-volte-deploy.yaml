@@ -258,6 +258,28 @@ services:
     networks:
       default:
         ipv4_address: ${RTPENGINE_IP}
+  freeswitch:
+    build: ./freeswitch
+    image: docker_freeswitch
+    container_name: freeswitch
+    privileged: true
+    env_file:
+      - .env
+    volumes:
+      #  - ./freeswitch:/mnt/freeswitch
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "5090/tcp"
+      - "5090/udp" 
+      - "5092/tcp"
+      - "5092/udp"
+      - "5066/tcp"  
+    networks:
+      default:
+        ipv4_address: ${FREESWITCH_IP}
   mysql:
     build: ./mysql
     image: docker_mysql
