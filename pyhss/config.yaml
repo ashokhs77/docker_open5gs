@@ -61,7 +61,7 @@ hss:
   Default_Sh_UserData: 'INSTALL_PREFIX/default_sh_user_data.xml'
 
   send_dwr: True
-  send_dwr_interval: 10
+  send_dwr_interval: 30
 
 
   #S-CSCF Pool

@@ -68,7 +68,7 @@ RUN apt-get update && \
 
 # Get open5gs code and install
 RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && \
-    git checkout 9a88b9154f57d4d1458c476bc7647d97b98b4eed && \
+    git checkout 946617e49c19f348df418d73314db1ac94ac0676 && \
     meson build --prefix=`pwd`/install && \
     ninja -C build && cd build && ninja install && \
     mkdir -p /open5gs/install/include
