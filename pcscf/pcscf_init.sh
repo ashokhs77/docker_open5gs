@@ -90,7 +90,6 @@ sed -i 's|EPC_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_pcscf/pcscf.xml
 sed -i 's|PCRF_BIND_PORT|'$PYHSS_BIND_PORT'|g' /etc/kamailio_pcscf/pcscf.xml
 sed -i 's|PCSCF_BIND_PORT|'$PCSCF_BIND_PORT'|g' /etc/kamailio_pcscf/pcscf.xml
 
-
 sed -i 's|RTPENGINE_IP|'$RTPENGINE_IP'|g' /etc/kamailio_pcscf/kamailio_pcscf.cfg
 sed -i 's|RTPENGINE_IP|'$RTPENGINE_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
 sed -i 's|FREESWITCH_IP|'$FREESWITCH_IP'|g' /etc/kamailio_pcscf/kamailio_pcscf.cfg
