@@ -353,6 +353,7 @@ services:
       - ./scscf:/mnt/scscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - /var/log/kamailio:/cdr-logs
     env_file:
       - .env
     environment:
