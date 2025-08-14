@@ -44,17 +44,12 @@ RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
 
 # Build and Install Kamailio
 RUN cd /usr/local/src/kamailio && make cfg
-
 COPY modules.lst /usr/local/src/kamailio/src
 
 RUN cd /usr/local/src/kamailio && \
-	make -j`nproc` Q=0 include_modules="$(cat src/modules.lst)" modules | tee make_all.txt && \
+	make -j`nproc` Q=0 all | tee make_all.txt && \
 	make install | tee make_install.txt && \
 	ldconfig
-
-COPY cdr_logger.sh /usr/local/bin/cdr-logger.sh
-
-RUN chmod +x /usr/local/bin/cdr-logger.sh
 
 COPY kamailio_init.sh /
 CMD ["/kamailio_init.sh"]
