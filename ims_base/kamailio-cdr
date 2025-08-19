@@ -1,0 +1,23 @@
+/var/log/kamailio/cdr.csv {
+    daily
+    rotate 30
+    compress
+    dateext
+    missingok
+    notifempty
+    create 0644 root root
+    firstaction
+        tmpfile=$(mktemp)
+        awk -F',' -v d="$(date -d '7 days ago' +%s)" '
+            {
+                cmd = "date -d \"" $4 "\" +%s"
+                if ((cmd | getline t) > 0) {
+                    close(cmd)
+                    if (t >= d) print $0
+                }
+            }
+        ' /var/log/kamailio/cdr.csv > $tmpfile
+        mv $tmpfile /var/log/kamailio/cdr.csv
+    endscript
+}
+
