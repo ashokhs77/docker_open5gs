@@ -36,6 +36,8 @@ RUN apt-get update && \
 					libsctp-dev libradcli-dev libradcli4 libjson-c-dev pkg-config iproute2 net-tools \
 					iputils-ping libgcrypt20-dev libjansson-dev libevent-dev libnghttp2-dev uuid-dev
 
+RUN mkdir -p /var/log/kamailio/
+
 # Fetch Kamailio code
 RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
 	git clone https://github.com/kamailio/kamailio 

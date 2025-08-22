@@ -48,8 +48,9 @@ RUN git clone https://github.com/freeswitch/spandsp.git /usr/local/src/spandsp &
 # Step 6: Build FreeSWITCH from source
 #RUN git clone https://github.com/Shreyas-B-Aradhya/freeswitch /usr/local/src/freeswitch
 RUN git clone https://github.com/Shreyas-B-Aradhya/freeswitch /usr/local/src/freeswitch && \
-    cd /usr/local/src/freeswitch  && git checkout b168a6bee9c9fd49aec32feeaad6d3508550bf4f
-    #cd /usr/local/src/freeswitch  && git checkout 8aaa38d90ceb2f040916f17226df570bc3c5557e
+      cd /usr/local/src/freeswitch  && git checkout dd23170bb1608f9840d3e006f68c57bee0812c3e
+    # cd /usr/local/src/freeswitch  && git checkout b168a6bee9c9fd49aec32feeaad6d3508550bf4f
+    # cd /usr/local/src/freeswitch  && git checkout 8aaa38d90ceb2f040916f17226df570bc3c5557e
     # cd /usr/local/src/freeswitch  && git checkout ee54173e54fd7181def97ed54931d1da80a9b5dd
 
 
