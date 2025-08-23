@@ -57,6 +57,8 @@ RUN git clone https://github.com/ashokhs77/pyhss && \
     cd pyhss && git checkout 938995d395072e1b3be27fa892c17f87c7767252
 RUN cd pyhss && pip3 install -r requirements.txt
 
+RUN pip install pandas openpyxl
+
 RUN mkdir -p /pyhss/log/
 
 WORKDIR pyhss
