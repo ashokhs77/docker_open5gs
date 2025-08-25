@@ -234,6 +234,7 @@ services:
     build: ./rtpengine
     image: docker_rtpengine
     container_name: rtpengine
+    network_mode: host
     privileged: true
     env_file:
       - .env
@@ -255,9 +256,13 @@ services:
     expose:
       - "2223/udp"
       - "49000-50000/udp"
-    networks:
-      default:
-        ipv4_address: ${RTPENGINE_IP}
+    ports:
+      - "2223:2223/udp"
+      - "49000-50000:49000-50000/udp"
+      - "9901:9901/tcp"
+        #networks:
+        #default:
+        #ipv4_address: ${RTPENGINE_IP}
   freeswitch:
     build: ./freeswitch
     image: docker_freeswitch
@@ -327,6 +332,7 @@ services:
     dns: ${DNS_IP}
     volumes:
       - ./icscf:/mnt/icscf
+      - ./icscf/dispatcher.list:/etc/kamailio_icscf/dispatcher.list:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
@@ -342,6 +348,9 @@ services:
       - "${ICSCF_BIND_PORT}/sctp"
       - "4060/udp"
       - "4060/tcp"
+    ports:
+      - "4060:4060/udp"
+      - "4060:4060/tcp"
     networks:
       default:
         ipv4_address: ${ICSCF_IP}
@@ -367,6 +376,9 @@ services:
       - "${SCSCF_BIND_PORT}/sctp"
       - "6060/udp"
       - "6060/tcp"
+    ports:
+      - "6060:6060/udp"
+      - "6060:6060/tcp"
     networks:
       default:
         ipv4_address: ${SCSCF_IP}
@@ -401,6 +413,13 @@ services:
       - "5100-5120/udp"
       - "6100-6120/tcp"
       - "6100-6120/udp"
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "5100-5120:5100-5120/tcp"
+      - "5100-5120:5100-5120/udp"
+      - "6100-6120:6100-6120/tcp"
+      - "6100-6120:6100-6120/udp"
     networks:
       default:
         ipv4_address: ${PCSCF_IP}

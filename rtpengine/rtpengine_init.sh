@@ -36,18 +36,21 @@ else
 fi
 
 # Populate options of the rtpengine cli command
-[ -z "$INTERFACE" ] && INTERFACE="$(awk 'END{print $1}' /etc/hosts)"
+#[ -z "$INTERFACE" ] && INTERFACE="$(awk 'END{print $1}' /etc/hosts)"
 [ -z "$TABLE" ] && TABLE="0"
-[ -z "$LISTEN_NG" ] && LISTEN_NG="$(awk 'END{print $1}' /etc/hosts):2223"
+#[ -z "$LISTEN_NG" ] && LISTEN_NG="$(awk 'END{print $1}' /etc/hosts):2223"
 [ -z "$PORT_MIN" ] && PORT_MIN="30000"
 [ -z "$PORT_MAX" ] && PORT_MAX="40000"
 [ -z "$TOS" ] && TOS="184"
 [ -z "$PIDFILE" ] && PIDFILE="/run/ngcp-rtpengine-daemon.pid"
 
-LISTEN_CLI="$(awk 'END{print $1}' /etc/hosts):9901"
+#LISTEN_CLI="$(awk 'END{print $1}' /etc/hosts):9901"
+LISTEN_CLI="0.0.0.0:9901"
 
 OPTIONS=""
-OPTIONS="$OPTIONS --interface=$INTERFACE --listen-ng=$LISTEN_NG --listen-cli=$LISTEN_CLI --pidfile=$PIDFILE --port-min=$PORT_MIN --port-max=$PORT_MAX "
+OPTIONS="$OPTIONS --interface=$INTERFACE"
+OPTIONS="$OPTIONS --listen-ng=$LISTEN_NG"
+OPTIONS="$OPTIONS --listen-cli=$LISTEN_CLI  --pidfile=$PIDFILE --port-min=$PORT_MIN --port-max=$PORT_MAX"
 OPTIONS="$OPTIONS --table=$TABLE  --tos=$TOS --foreground"
 
 if test "$NO_FALLBACK" = "yes" ; then
