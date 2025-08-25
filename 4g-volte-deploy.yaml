@@ -271,7 +271,7 @@ services:
     env_file:
       - .env
     volumes:
-      #  - ./freeswitch:/mnt/freeswitch
+      - ./freeswitch:/mnt/freeswitch
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     cap_add:

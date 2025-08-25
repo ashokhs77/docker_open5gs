@@ -6,8 +6,14 @@ set -e
 
 echo "Starting FreeSWITCH..."
 
-# This line is currently commented out. It was likely intended to replace a placeholder IP in vars.xml
-# sed -i 's|DOCKER_HOST_IP|'"$DOCKER_HOST_IP"'|g' /usr/local/freeswitch/conf/vars.xml
+echo "PCSCF_IP is: $PCSCF_IP"
+
+cp    /mnt/freeswitch/acl.conf.xml /usr/local/freeswitch/conf/autoload_configs
+#cp    /mnt/freeswitch/acl.conf.xml /usr/local/src/freeswitch/conf/vanilla/autoload_configs
+
+sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /usr/local/freeswitch/conf/autoload_configs/acl.conf.xml
+#sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /usr/local/src/freeswitch/conf/vanilla/autoload_configs/acl.conf.xml
+
 
 /usr/local/freeswitch/bin/freeswitch -nonat
 
