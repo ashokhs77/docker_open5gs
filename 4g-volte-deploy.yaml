@@ -279,9 +279,9 @@ services:
     ports:
       - "5090/tcp"
       - "5090/udp" 
-      - "5092/tcp"
-      - "5092/udp"
-      - "5066/tcp"  
+      - "5092:5092/tcp"
+      - "5092:5092/udp"
+      - "5066/tcp"
     networks:
       default:
         ipv4_address: ${FREESWITCH_IP}
