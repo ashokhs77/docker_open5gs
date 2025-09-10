@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -73,4 +73,4 @@ sleep 5
 python3 diameterService.py &
 # Sleep is needed to let db be populated in a non-overlapping fashion
 sleep 5
-python3 hssService.py
+exec python3 hssService.py $@

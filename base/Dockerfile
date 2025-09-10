@@ -1,6 +1,6 @@
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:focal AS builder
+FROM ubuntu:jammy AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -77,7 +77,7 @@ RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && 
 #RUN cd open5gs/webui && npm ci
 
 # Build final image
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 ENV DEBIAN_FRONTEND=noninteractive
 

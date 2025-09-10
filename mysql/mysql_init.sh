@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -57,4 +57,4 @@ fi
 
 pkill -9 mysqld
 sleep 5
-mysqld_safe
+exec mysqld_safe $@

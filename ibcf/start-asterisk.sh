@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -40,4 +40,4 @@ ip r add ${UE_IPV4_IMS} via ${UPF_IP}
 # Start server.
 echo 'Starting Asterisk'
 
-asterisk -f
+exec asterisk -f $@

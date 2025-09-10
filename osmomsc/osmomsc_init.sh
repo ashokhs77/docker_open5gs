@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,10 @@ sed -i 's|OSMOHLR_IP|'$OSMOHLR_IP'|g' /etc/osmocom/osmo-msc.cfg
 sed -i 's|MNC|'$MNC'|g' /etc/osmocom/osmo-msc.cfg
 sed -i 's|MCC|'$MCC'|g' /etc/osmocom/osmo-msc.cfg
 sed -i 's|THREEGPP_REALM|'$THREEGPP_REALM'|g' /etc/osmocom/osmo-msc.cfg
+
+rm -f /mnt/osmomsc/sms.db*
+cd /mnt/osmomsc
+exec /usr/bin/osmo-msc -c /etc/osmocom/osmo-msc.cfg $@
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

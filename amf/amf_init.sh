@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -34,6 +34,9 @@ sed -i 's|MNC|'$MNC'|g' install/etc/open5gs/amf.yaml
 sed -i 's|MCC|'$MCC'|g' install/etc/open5gs/amf.yaml
 sed -i 's|TAC|'$TAC'|g' install/etc/open5gs/amf.yaml
 sed -i 's|MAX_NUM_UE|'$MAX_NUM_UE'|g' install/etc/open5gs/amf.yaml
+
+cd install/bin
+exec ./open5gs-amfd $@
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

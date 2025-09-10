@@ -1,6 +1,6 @@
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -61,6 +61,6 @@ RUN pip install pandas openpyxl
 
 RUN mkdir -p /pyhss/log/
 
-WORKDIR pyhss
+WORKDIR /pyhss
 
-CMD /mnt/pyhss/pyhss_init.sh
+CMD ["/mnt/pyhss/pyhss_init.sh"]
