@@ -34,6 +34,12 @@ Quite contrary to the name of the repository, this repository contains docker fi
   - [Provisioning of IMSI and MSISDN with OsmoHLR](#provisioning-of-imsi-and-msisdn-with-osmohlr-as-follows)
   - [Provisioning of SIM information in pyHSS](#provisioning-of-sim-information-in-pyhss-is-as-follows)
   - [Provisioning of Diameter Peer + Subscriber information in Sigscale OCS](#provisioning-of-diameter-peer--subscriber-information-in-sigscale-ocs-as-follows-skip-if-ocs-is-not-deployed)
+- [Testing VoWiFi with COTS UE](#testing-vowifi-with-cots-ue)
+  - [Pre-requisites](#pre-requisites)
+  - [Deploy the required components](#deploy-the-required-components)
+  - [Provision SIM and IMS subscriber information](#provision-sim-and-ims-subscriber-information)
+  - [Manually configure DNS settings on your phone (WiFi connection)](#manually-configure-dns-settings-on-your-phone-wifi-connection)
+  - [UE configuration](#ue-configuration)
 - [Not supported](#not-supported)
 
 ## Tested Setup
@@ -144,36 +150,40 @@ docker tag ghcr.io/herlesupreeth/docker_swu_client:master docker_swu_client
 #### Clone repository and build base docker image of open5gs, kamailio, srsRAN_4G, srsRAN_Project, ueransim
 
 ```
-# Build docker images for open5gs EPC/5GC components
+# Build docker image for open5gs EPC/5GC components
 git clone https://github.com/herlesupreeth/docker_open5gs
 cd docker_open5gs/base
 docker build --no-cache --force-rm -t docker_open5gs .
 
-# Build docker images for kamailio IMS components
+# Build docker image for kamailio IMS components
 cd ../ims_base
 docker build --no-cache --force-rm -t docker_kamailio .
 
-# Build docker images for srsRAN_4G eNB + srsUE (4G+5G)
+# Build docker image for srsRAN_4G eNB + srsUE (4G+5G)
 cd ../srslte
 docker build --no-cache --force-rm -t docker_srslte .
 
-# Build docker images for srsRAN_Project gNB
+# Build docker image for srsRAN_Project gNB
 cd ../srsran
 docker build --no-cache --force-rm -t docker_srsran .
 
-# Build docker images for UERANSIM (gNB + UE)
+# Build docker image for UERANSIM (gNB + UE)
 cd ../ueransim
 docker build --no-cache --force-rm -t docker_ueransim .
 
-# Build docker images for EUPF
+# Build docker image for EUPF
 cd ../eupf
 docker build --no-cache --force-rm -t docker_eupf .
 
-# Build docker images for OpenSIPS IMS
+# Build docker image for OpenSIPS IMS
 cd ../opensips_ims_base
 docker build --no-cache --force-rm -t docker_opensips .
 
-# Build docker images for SWu-IKEv2
+# Build docker image for Osmo-epdg + Strongswan-epdg
+cd ../osmoepdg
+docker build --no-cache --force-rm -t docker_osmoepdg .
+
+# Build docker image for SWu-IKEv2
 cd ../swu_client
 docker build --no-cache --force-rm -t docker_swu_client .
 ```
@@ -540,12 +550,44 @@ Password : admin
 ```
 3. Configure SMF as Diameter Peer as mentioned here - https://sigscale.atlassian.net/wiki/spaces/SO/pages/3833890/How-To+with+OCS#Add-an-DIAMETER-client-(DRA%2FSGSN%2FPGW)
 
-    NOTE: IP address must be equal to **SMF_IP** in **.env** file and the Protocol must be set to Diameter.
+    **NOTE:** IP address must be equal to **SMF_IP** in **.env** file and the Protocol must be set to Diameter.
 
 4. Subscriber information can be provisioned as mentioned here - https://sigscale.atlassian.net/wiki/spaces/SO/pages/3833890/How-To+with+OCS#Add-a-subscriber
 
-    NOTE: The IMSI and the MSISDN must be equal to the one provisioned in open5gs HSS and/or pyHSS.
+    **NOTE:** The IMSI and the MSISDN must be equal to the one provisioned in open5gs HSS and/or pyHSS.
 
+## Testing VoWiFi with COTS UE
+
+#### Pre-requisites
+  - Set DOCKER_HOST_IP to the IP of the host machine where docker_open5gs is deployed.
+
+#### Deploy the required components
+  Ensure you have the following services running:
+  - 4G Core Network (EPC)
+  - IMS (Kamailio or OpenSIPS)
+  - Osmo-ePDG and Strongswan-ePDG
+
+  Start the VoWiFi-enabled deployment using:
+  ```
+  docker compose -f 4g-volte-vowifi-deploy.yaml up
+  ```
+
+#### Provision SIM and IMS subscriber information
+  - Add subscriber details in open5gs HSS or pyHSS as described in the provisioning sections above.
+  - Ensure the IMSI, MSISDN, and authentication keys match those programmed on your SIM.
+
+#### Manually configure DNS settings on your phone (WiFi connection)
+  - On your phone, go to the WiFi settings and select the network you are connected to.
+  - Edit the network settings and look for the DNS configuration option (may be under "Advanced" or "IP settings").
+    - On Android devices, switch from DHCP to Static IP configuration to manually set DNS.
+    - On iOS devices, you can directly set the DNS server.
+  - Set the DNS server to point to DOCKER_HOST_IP.
+  - Save the settings and reconnect to the WiFi network.
+
+  **Tip:** Proper DNS resolution is required for the UE to locate and register with IMS and ePDG services.
+
+#### UE configuration
+  - On your UE (User Equipment), ensure VoWiFi (WiFi calling) is enabled.
 
 ## Not supported
 - IPv6 usage in Docker
