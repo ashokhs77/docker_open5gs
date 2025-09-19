@@ -1,6 +1,6 @@
 # BSD 2-Clause License
 
-# Copyright (c) 2020-2025, Supreeth Herle
+# Copyright (c) 2020, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:jammy AS builder
+FROM ubuntu:focal AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -68,7 +68,7 @@ RUN apt-get update && \
 
 # Get open5gs code and install
 RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && \
-    git checkout b027f90cf57d4d5d477cac1248ffe4a341d7b3e8 && \
+    git checkout 3926c003af18da8bbcbe236800ba0bb5c19653af && \
     meson build --prefix=`pwd`/install && \
     ninja -C build && cd build && ninja install && \
     mkdir -p /open5gs/install/include
@@ -77,7 +77,7 @@ RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && 
 #RUN cd open5gs/webui && npm ci
 
 # Build final image
-FROM ubuntu:jammy
+FROM ubuntu:focal
 
 ENV DEBIAN_FRONTEND=noninteractive
 

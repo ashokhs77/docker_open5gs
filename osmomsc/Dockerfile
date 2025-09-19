@@ -1,6 +1,6 @@
 # BSD 2-Clause License
 
-# Copyright (c) 2020-2025, Supreeth Herle
+# Copyright (c) 2020, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -38,4 +38,6 @@ RUN wget $OSMOCOM_REPO/Release.key && \
     echo "deb [signed-by=/etc/apt/trusted.gpg.d/osmocom-latest.asc] $OSMOCOM_REPO/ ./" > /etc/apt/sources.list.d/osmocom-latest.list && \
     apt-get update && apt-get install -f && apt-get --install-suggests -y install osmo-msc
 
-CMD ["/mnt/osmomsc/osmomsc_init.sh"]
+CMD /mnt/osmomsc/osmomsc_init.sh && \
+    rm -f /mnt/osmomsc/sms.db* && \
+    cd /mnt/osmomsc && /usr/bin/osmo-msc -c /etc/osmocom/osmo-msc.cfg

@@ -50,26 +50,17 @@ jobs:
           - image: docker_rtpengine
             context: rtpengine
             file: Dockerfile
-          # - image: docker_oai_enb
-          #   context: oai
-          #   file: enb_dockerfile
-          # - image: docker_oai_gnb
-          #   context: oai
-          #   file: gnb_dockerfile
+          - image: docker_oai_enb
+            context: oai
+            file: enb_dockerfile
+          - image: docker_oai_gnb
+            context: oai
+            file: gnb_dockerfile
           - image: docker_eupf
             context: eupf
             file: Dockerfile
           - image: docker_opensips
             context: opensips_ims_base
-            file: Dockerfile
-          - image: docker_ocs
-            context: ocs
-            file: Dockerfile
-          - image: docker_osmoepdg
-            context: osmoepdg
-            file: Dockerfile
-          - image: docker_swu_client
-            context: swu_client
             file: Dockerfile
 
     runs-on: ubuntu-latest

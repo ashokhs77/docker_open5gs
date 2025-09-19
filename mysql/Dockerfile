@@ -1,6 +1,6 @@
 # BSD 2-Clause License
 
-# Copyright (c) 2020-2025, Supreeth Herle
+# Copyright (c) 2020, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -24,7 +24,7 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:jammy
+FROM ubuntu:focal
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -37,4 +37,4 @@ RUN chmod 755 /mysql_init.sh
 
 RUN /etc/init.d/mysql stop
 
-CMD ["/mysql_init.sh"]
+CMD /mysql_init.sh

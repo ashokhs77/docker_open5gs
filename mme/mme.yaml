@@ -59,5 +59,4 @@ mme:
       enabled: True
       allowed_states: [ WHITELIST, BLACKLIST, GREYLIST ]
     time:
-      t3412:
-        value: 540
+      t3412: 540
