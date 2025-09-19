@@ -253,8 +253,8 @@
   <X-PRE-PROCESS cmd="set" data="global_codec_prefs=OPUS,G722,PCMU,PCMA,H264,VP8"/>
   <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=OPUS,G722,PCMU,PCMA,H264,VP8"/>
   -->
-  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=AMR,AMR-WB,H264,VP8"/>
-  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=AMR,AMR-WB,H264,VP8"/>
+  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=AMR,AMR-WB,H264,VP8,OPUS,G722,PCMU,PCMA"/>
+  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=AMR,AMR-WB,H264,VP8,OPUS,G722,PCMU,PCMA"/>
   
   <!--
       xmpp_client_profile and xmpp_server_profile
@@ -428,8 +428,8 @@
 
   <!-- Video Settings -->
   <!-- Setting the max bandwdith -->
-  <X-PRE-PROCESS cmd="set" data="rtp_video_max_bandwidth_in=1mb"/>
-  <X-PRE-PROCESS cmd="set" data="rtp_video_max_bandwidth_out=1mb"/>
+  <X-PRE-PROCESS cmd="set" data="rtp_video_max_bandwidth_in=512kb"/>
+  <X-PRE-PROCESS cmd="set" data="rtp_video_max_bandwidth_out=512kb"/>
 
   <!-- WebRTC Video -->
   <!-- Suppress CNG for WebRTC Audio -->

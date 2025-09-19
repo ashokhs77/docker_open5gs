@@ -4,3 +4,7 @@
 1 sip:10.2.110.193:4060 0 0
 
 
+
+# set 2 = external SIP servers (Kamailio)
+2 sip:10.2.110.220:5060 0
+2 sip:10.2.110.193:5060 0
