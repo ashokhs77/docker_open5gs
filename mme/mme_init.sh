@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -53,6 +53,9 @@ sed -i 's|EPC_DOMAIN|'$IMS_DOMAIN'|g' install/etc/freeDiameter/make_certs.sh
 
 # Generate TLS certificates
 ./install/etc/freeDiameter/make_certs.sh install/etc/freeDiameter
+
+cd install/bin
+exec ./open5gs-mmed $@
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

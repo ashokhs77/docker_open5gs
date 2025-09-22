@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -29,6 +29,9 @@
 cp /mnt/osmohlr/osmo-hlr.cfg /etc/osmocom
 
 sed -i 's|OSMOHLR_IP|'$OSMOHLR_IP'|g' /etc/osmocom/osmo-hlr.cfg
+
+cd /mnt/osmohlr
+exec /usr/bin/osmo-hlr -c /etc/osmocom/osmo-hlr.cfg --db-upgrade $@
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

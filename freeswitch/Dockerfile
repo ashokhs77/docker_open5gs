@@ -1,4 +1,4 @@
-FROM ubuntu:jammy as builder
+FROM ubuntu:jammy AS builder
 
 
 ENV DEBIAN_FRONTEND=noninteractive

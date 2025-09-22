@@ -1,6 +1,6 @@
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -24,15 +24,15 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-ENV PROMETHEUS_VERSION=2.55.0
+ENV PROMETHEUS_VERSION=3.5.0
 
 RUN apt-get update && \
     apt-get install -y wget && \
     wget -q https://github.com/prometheus/prometheus/releases/download/v$PROMETHEUS_VERSION/prometheus-$PROMETHEUS_VERSION.linux-$(dpkg --print-architecture).tar.gz && \
     tar xvfz prometheus-$PROMETHEUS_VERSION.linux-$(dpkg --print-architecture).tar.gz
 
-CMD /mnt/metrics/metrics_init.sh
+CMD ["/mnt/metrics/metrics_init.sh"]

@@ -2,7 +2,7 @@
 
 # BSD 2-Clause License
 
-# Copyright (c) 2020, Supreeth Herle
+# Copyright (c) 2020-2025, Supreeth Herle
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without
@@ -89,6 +89,8 @@ ip6tables-save > /etc/ip6tables.rules
 
 # Add static route to route traffic back to UE as there is not NATing
 ip r add ${UE_IPV4_IMS} via ${UPF_IP}
+# Route needed for VoWiFi client where internet APN is used
+ip r add ${UE_IPV4_INTERNET} via ${UPF_IP}
 
 set -x
 
