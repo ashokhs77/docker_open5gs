@@ -395,7 +395,7 @@
     </extension>
 
     <extension name="cdquality_conferences_720">
-      <condition field="destination_number" expression="^(36\d{4})$">
+      <condition field="destination_number" expression="^(36\d{4})(?:;.*)?$">
 	<action application="answer"/>
 	<action application="conference" data="$1@video-mcu-stereo-720"/>
       </condition>

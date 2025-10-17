@@ -44,7 +44,7 @@
     </extension>
 
     <extension name="public_conference_extensions">
-      <condition field="destination_number" expression="^(3[5-8][01][0-9][0-9][0-9])$">
+      <condition field="destination_number" expression="^(3[5-8][01][0-9][0-9][0-9])(?:;.*)?$">
 	<action application="transfer" data="$1 XML default"/>
       </condition>
     </extension>
