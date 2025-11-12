@@ -1,10 +1,8 @@
-# ng-voice Interconnect
-1 sip:10.2.110.121:4060 0 0
-1 sip:10.2.110.220:4060 0 0
-1 sip:10.2.110.193:4060 0 0
-
+# Internib connect servers
+1 sip:10.2.110.200:4060 0 0
+1 sip:10.2.110.222:4060 0 0
 
 
 # set 2 = external SIP servers (Kamailio)
-2 sip:10.2.110.220:5060 0
-2 sip:10.2.110.193:5060 0
+2 sip:10.2.110.200:5060 0
+#2 sip:10.2.110.193:5060 0

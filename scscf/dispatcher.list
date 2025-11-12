@@ -1,1 +1,4 @@
-# ng-voice Interconnect
+# Internib servers ip's
+1 sip:10.2.110.200:6060 0 0
+1 sip:10.2.110.222:6060 0 0
+
