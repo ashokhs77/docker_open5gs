@@ -49,6 +49,13 @@
       </condition>
     </extension>
 
+    <!-- New block for 1XXX -->
+    <extension name="public_conference_1xxx">
+      <condition field="destination_number" expression="^(1\d{3})(?:;.*)?$">
+        <action application="transfer" data="$1 XML default"/>
+      </condition>
+    </extension>
+
     <extension name="from_kamailio_pcscf">
       <condition field="network_addr" expression="^172\.22\.0\.21$" />
       <condition field="destination_number" expression="^(.+)$">
