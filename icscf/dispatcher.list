@@ -1,6 +1,6 @@
 # Internib connect servers
 1 sip:10.2.110.121:4060 0 0
-1 sip:10.2.110.222:4060 0 0
+1 sip:10.2.110.178:4060 0 0
 
 
 # set 2 = external SIP servers (Kamailio)
