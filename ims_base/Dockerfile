@@ -40,11 +40,10 @@ RUN mkdir -p /var/log/kamailio/
 
 # Fetch Kamailio code
 RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
-	#git clone https://github.com/kamailio/kamailio 
-	#&& \
-	#cd kamailio && git checkout ba13699faba8938ff547a34af9f05631d0b8a9cd
+	#git clone https://github.com/kamailio/kamailio && \
+	#cd kamailio && git checkout 787bbe5c91e9fc02f741fdd26b06ccad87b4c19e
 	git clone https://github.com/kamailio/kamailio && \
-        cd kamailio && git fetch && git checkout adc6c53411e572a8f77efffa06ce3e7b5ed02764
+        cd kamailio && git fetch && git checkout cc8bd051b411d5b375a318ae245a4363512cfdea
 # Build and Install Kamailio
 RUN cd /usr/local/src/kamailio && make cfg
 COPY modules.lst /usr/local/src/kamailio/src
