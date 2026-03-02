@@ -54,7 +54,7 @@ RUN curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyri
 
 # Get pyhss code and install
 RUN git clone https://github.com/ashokhs77/pyhss && \
-    cd pyhss && git checkout 2f99bf13b4ffa9c053372b46473342e8bc3f07ed
+    cd pyhss && git checkout 366d90a95278f04b099b30262bc2bfad0de57e9a
 RUN cd pyhss && pip3 install -r requirements.txt
 
 RUN pip install pandas openpyxl
