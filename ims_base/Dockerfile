@@ -36,20 +36,16 @@ RUN apt-get update && \
 					libsctp-dev libradcli-dev libradcli4 libjson-c-dev pkg-config iproute2 net-tools \
 					iputils-ping libgcrypt20-dev libjansson-dev libevent-dev libnghttp2-dev uuid-dev
 
-RUN mkdir -p /var/log/kamailio/
-
 # Fetch Kamailio code
 RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
-	#git clone https://github.com/kamailio/kamailio && \
-	#cd kamailio && git checkout 787bbe5c91e9fc02f741fdd26b06ccad87b4c19e
 	git clone https://github.com/kamailio/kamailio && \
-        cd kamailio && git fetch && git checkout cc8bd051b411d5b375a318ae245a4363512cfdea
+	cd kamailio && git checkout 6fc2102ca771f5a64bd058eee08dd537f6b804e0
+
 # Build and Install Kamailio
 RUN cd /usr/local/src/kamailio && make cfg
 COPY modules.lst /usr/local/src/kamailio/src
-
 RUN cd /usr/local/src/kamailio && \
-	make -j`nproc` Q=0 include_modules="$(cat src/modules.lst)" modules | tee make_all.txt && \
+	make -j`nproc` Q=0 all | tee make_all.txt && \
 	make install | tee make_install.txt && \
 	ldconfig
 

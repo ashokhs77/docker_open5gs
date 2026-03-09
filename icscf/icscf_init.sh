@@ -95,7 +95,6 @@ sed -i 's|PYHSS_BIND_PORT|'$PYHSS_BIND_PORT'|g' /etc/kamailio_icscf/icscf.xml
 sed -i 's|ICSCF_BIND_PORT|'$ICSCF_BIND_PORT'|g' /etc/kamailio_icscf/icscf.xml
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_icscf/icscf.xml
 
-mkdir -p /var/run/kamailio_icscf
 rm -f /kamailio_icscf.pid
 exec kamailio -f /etc/kamailio_icscf/kamailio_icscf.cfg -P /kamailio_icscf.pid -DD -E -e $@
 

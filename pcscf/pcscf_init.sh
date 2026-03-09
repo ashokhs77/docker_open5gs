@@ -99,11 +99,10 @@ sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/kamailio_pcscf
 sed -i 's|RTPENGINE_IP|'$RTPENGINE_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
 sed -i 's|FREESWITCH_IP|'$FREESWITCH_IP'|g' /etc/kamailio_pcscf/kamailio_pcscf.cfg
 sed -i 's|NIB|'$NIB'|g' /etc/kamailio_pcscf/kamailio_pcscf.cfg
-sed -i 's|CONF_PREFIX_NUM|'$CONF_PREFIX_NUM'|g' /etc/kamailio_pcscf/kamailio_pcscf.cfg
+
 # Route needed for VoWiFi client where internet APN is used
 ip r add ${UE_IPV4_INTERNET} via ${UPF_IP}
 
-mkdir -p /var/run/kamailio_pcscf
 rm -f /kamailio_pcscf.pid
 exec kamailio -f /etc/kamailio_pcscf/kamailio_pcscf.cfg -P /kamailio_pcscf.pid -DD -E -e $@
 
