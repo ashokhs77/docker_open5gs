@@ -457,6 +457,8 @@ services:
     expose:
       - "29118/sctp"
       - "2775/tcp"
+    ports:
+      - "29118:29118/sctp"
     networks:
       default:
         ipv4_address: ${OSMOMSC_IP}
@@ -477,6 +479,38 @@ services:
     networks:
       default:
         ipv4_address: ${OSMOHLR_IP}
+  mmsc:
+    build: ./mmsc
+    image: mmsc
+    container_name: mmsc
+    dns: ${DNS_IP}
+    volumes:
+      - ./mmsc/kannel.conf:/usr/local/kannel/etc/kannel.conf
+      - ./mmsc/mbuni.conf:/usr/local/mbuni/etc/mbuni.conf
+      - mms_storage:/tmp/mms-storage
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=mmsc
+    depends_on:
+      - smsc
+    expose:
+      - "13000/tcp"   # Kannel admin
+      - "13001/tcp"   # smsbox
+      - "13013/tcp"
+      - "8090/tcp"    # WAP gateway
+      - "8181/tcp"    # Mbuni MMSC HTTP
+    ports:
+      - "8090:8090/tcp"
+      - "8181:8181/tcp"
+      - "13000:13000/tcp"
+      - "13001:13001/tcp"
+      - "13013:13013/tcp"
+    networks:
+      default:
+        ipv4_address: ${MMSC_IP}
   metrics:
     build: ./metrics
     image: docker_metrics
@@ -532,3 +566,5 @@ volumes:
     name: docker_open5gs_mongodbdata
   dbdata:
     name: docker_open5gs_dbdata
+  mms_storage:
+    name: docker_open5gs_mms_storage

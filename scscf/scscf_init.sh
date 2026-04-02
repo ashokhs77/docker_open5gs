@@ -44,6 +44,19 @@ done
 # Sleep until permissions are set
 sleep 10;
 
+MAX_WAIT=60
+WAITED=0
+until mysql -u scscf -pheslo -h ${MYSQL_IP} scscf -e "SELECT 1;" &>/dev/null; do
+    echo "Waiting for scscf DB user to be ready... (${WAITED}s)"
+    sleep 3
+    WAITED=$((WAITED + 3))
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        echo "ERROR: scscf DB not ready after ${MAX_WAIT}s, aborting"
+        exit 1
+    fi
+done
+echo "scscf DB is ready."
+
 # Create SCSCF database, populate tables and grant privileges
 if [[ -z "`mysql -u root -h ${MYSQL_IP} -qfsBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='scscf'" 2>&1`" ]];
 then

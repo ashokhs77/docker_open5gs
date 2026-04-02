@@ -31,7 +31,7 @@ ENV OSMOCOM_REPO="https://downloads.osmocom.org/packages/osmocom:/latest/Debian_
 
 # Install updates and dependencies
 RUN apt-get update && \
-    apt-get -y install wget gnupg telnet
+    apt-get -y install wget gnupg telnet sqlite3
 
 RUN wget $OSMOCOM_REPO/Release.key && \
     mv Release.key /etc/apt/trusted.gpg.d/osmocom-latest.asc && \

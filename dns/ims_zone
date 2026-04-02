@@ -38,3 +38,5 @@ _sip._tcp.voicemail     1D SRV 0 0 5090 voicemail
 
 @ 1D IN NAPTR 100 10 "s" "SIP+D2T" "" _sip._tcp.IMS_DOMAIN.
 @ 1D IN NAPTR 100 10 "s" "SIP+D2U" "" _sip._udp.IMS_DOMAIN.
+
+mmsc                    1D IN A         MMSC_IP
