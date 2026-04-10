@@ -26,6 +26,9 @@
 
 FROM ubuntu:jammy
 
+ARG LICENSE=OFF
+ENV LICENSE=${LICENSE}
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install updates and dependencies
@@ -36,14 +39,25 @@ RUN apt-get update && \
 					libsctp-dev libradcli-dev libradcli4 libjson-c-dev pkg-config iproute2 net-tools \
 					iputils-ping libgcrypt20-dev libjansson-dev libevent-dev libnghttp2-dev uuid-dev
 
+RUN mkdir -p /var/log/kamailio/
+
+# Copy license library into system lib path
+COPY license/libLwsLicenseCheck.so /usr/lib64/
+RUN chmod 777 /usr/lib64/libLwsLicenseCheck.so
+
 # Fetch Kamailio code
 RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
-	git clone https://github.com/kamailio/kamailio && \
-	cd kamailio && git checkout 9a098ceb7da8fb756b8325094b250912e6a60bae
+	git clone https://github.com/ganeshsskumar/kamailio && \
+	cd kamailio && git checkout 02b50932040e922839053300748739da9ea29dd6
 
 # Build and Install Kamailio
 RUN cd /usr/local/src/kamailio && make cfg
+RUN if [ "$LICENSE" = "ON" ]; then \
+        echo "Injecting LICENSE macro into Kamailio build"; \
+        echo 'DEFS+=-DENABLE_LICENSE_CHECK' >> /usr/local/src/kamailio/src/Makefile.defs; \
+    fi
 COPY modules.lst /usr/local/src/kamailio/src
+
 RUN cd /usr/local/src/kamailio && \
 	make -j`nproc` Q=0 all | tee make_all.txt && \
 	make install | tee make_install.txt && \

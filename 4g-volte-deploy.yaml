@@ -100,7 +100,7 @@ services:
       - "8805/udp"
       - "2152/udp"
     ports:
-      - "2152:2152/udp"
+      - "${DOCKER_HOST_IP}:2152:2152/udp"
     networks:
       default:
         ipv4_address: ${SGWU_IP}
@@ -169,7 +169,10 @@ services:
       - .env
     environment:
       - COMPONENT_NAME=mme
+      - LD_LIBRARY_PATH=/usr/lib64
     volumes:
+      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./mme:/mnt/mme
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -327,6 +330,8 @@ services:
     container_name: icscf
     dns: ${DNS_IP}
     volumes:
+      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./icscf:/mnt/icscf
       - ./icscf/dispatcher.list:/etc/kamailio_icscf/dispatcher.list:ro
       - /etc/timezone:/etc/timezone:ro
@@ -335,6 +340,7 @@ services:
       - .env
     environment:
       - COMPONENT_NAME=icscf
+      - LD_LIBRARY_PATH=/usr/lib64
     depends_on:
       - dns
       - mysql
@@ -355,6 +361,8 @@ services:
     container_name: scscf
     dns: ${DNS_IP}
     volumes:
+      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./scscf:/mnt/scscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -363,6 +371,7 @@ services:
       - .env
     environment:
       - COMPONENT_NAME=scscf
+      - LD_LIBRARY_PATH=/usr/lib64
     depends_on:
       - dns
       - mysql
@@ -386,6 +395,8 @@ services:
     cap_add:
       - NET_ADMIN
     volumes:
+      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./pcscf:/mnt/pcscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -394,6 +405,7 @@ services:
     environment:
       - COMPONENT_NAME=pcscf
       - DEPLOY_MODE=4G
+      - LD_LIBRARY_PATH=/usr/lib64
     depends_on:
       - dns
       - mysql
@@ -424,6 +436,8 @@ services:
     container_name: smsc
     dns: ${DNS_IP}
     volumes:
+      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./smsc:/mnt/smsc
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -431,6 +445,7 @@ services:
       - .env
     environment:
       - COMPONENT_NAME=smsc
+      - LD_LIBRARY_PATH=/usr/lib64
     depends_on:
       - dns
       - mysql

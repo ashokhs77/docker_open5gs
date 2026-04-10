@@ -26,6 +26,9 @@
 
 FROM ubuntu:jammy AS builder
 
+ARG LICENSE=OFF
+ENV LICENSE=${LICENSE}
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install updates and dependencies
@@ -66,9 +69,22 @@ RUN apt-get update && \
 #    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
 #    apt-get update && apt install nodejs -y
 
+# Copy license library into system lib path
+COPY license/libLwsLicenseCheck.so /usr/lib64/
+RUN chmod 777 /usr/lib64/libLwsLicenseCheck.so 
+
+# Refresh library linker cache
+RUN ldconfig
+
 # Get open5gs code and install
 RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && \
-    git checkout  6e3bb0a2ef90337762df420751477a8fed1d662f && \
+    git checkout  142951f98a687bc1bee05d3efa33ccceeffbc21e && \
+    if [ "$LICENSE" = "OFF" ]; then \
+        echo "Disabling MME License"; \
+        sed -i "s/, *'-DENABLE_LICENSE_CHECK'//g" src/mme/meson.build; \
+    else \
+        echo "MME License Enabled"; \
+    fi && \
     meson build --prefix=`pwd`/install && \
     ninja -C build && cd build && ninja install && \
     mkdir -p /open5gs/install/include
@@ -126,6 +142,13 @@ COPY --from=builder /open5gs/install/include /open5gs/install/include
 COPY --from=builder /open5gs/install/lib /open5gs/install/lib
 #COPY --from=builder /open5gs/webui /open5gs/webui
 COPY --from=builder /open5gs/misc/db /open5gs/misc/db
+
+# Copy License Files (runtime too)
+COPY license/libLwsLicenseCheck.so /usr/lib64/
+RUN chmod 777 /usr/lib64/libLwsLicenseCheck.so
+
+# Refresh linker
+RUN ldconfig
 
 # Set the working directory to open5gs
 WORKDIR /open5gs
