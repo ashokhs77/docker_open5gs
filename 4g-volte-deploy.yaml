@@ -452,6 +452,9 @@ services:
     expose:
       - "7090/udp"
       - "7090/tcp"
+    ports:
+      - "7090:7090/udp"
+      - "7090:7090/tcp"  
     networks:
       default:
         ipv4_address: ${SMSC_IP}

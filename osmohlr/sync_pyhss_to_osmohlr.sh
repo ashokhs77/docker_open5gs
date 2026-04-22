@@ -4,6 +4,7 @@
 # Fetches all subscribers from PyHSS API (paginated) and syncs to OsmoHLR
 # - INSERT OR IGNORE: only inserts new subscribers (preserves existing IDs)
 # - UPDATE: updates MSISDN if it changed for an existing IMSI
+# PyHSS uses zero-based pagination: page=0, page=1, page=2...
 # Usage: ./sync_pyhss_to_osmohlr.sh
 # =============================================================================
 
@@ -37,12 +38,19 @@ if ! curl -s --max-time 5 "${PYHSS_API}/subscriber/list" > /dev/null 2>&1; then
     exit 1
 fi
 
-# ── Sync function ─────────────────────────────────────────────────────────────
+# ── Sync one page ─────────────────────────────────────────────────────────────
 sync_page() {
     local PAGE_DATA="$1"
     local PAGE_NUM="$2"
 
-    local COUNT=$(echo "$PAGE_DATA" | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d))" 2>/dev/null)
+    local COUNT=$(echo "$PAGE_DATA" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(len(d) if isinstance(d, list) else 0)
+except:
+    print(0)
+" 2>/dev/null)
 
     if [ "$COUNT" -eq 0 ]; then
         return 1  # No more data
@@ -74,13 +82,14 @@ print(' '.join(stmts))
         return 2
     fi
 
+    echo "$COUNT"
     return 0
 }
 
-# ── Paginated fetch and sync ──────────────────────────────────────────────────
+# ── Paginated fetch and sync (zero-based pages) ───────────────────────────────
 log_info "Starting paginated sync from PyHSS (page size: ${PAGE_SIZE})..."
 
-PAGE=1
+PAGE=0
 TOTAL_SYNCED=0
 
 while true; do
@@ -89,8 +98,8 @@ while true; do
     PAGE_DATA=$(curl -s --max-time 10 \
         "${PYHSS_API}/subscriber/list?page=${PAGE}&page_size=${PAGE_SIZE}" 2>/dev/null)
 
-    # Check if response is valid JSON array
-    IS_VALID=$(echo "$PAGE_DATA" | python3 -c "
+    # Validate JSON response
+    COUNT=$(echo "$PAGE_DATA" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -99,32 +108,31 @@ except:
     print(-1)
 " 2>/dev/null)
 
-    if [ "$IS_VALID" -eq -1 ]; then
+    if [ "$COUNT" -eq -1 ]; then
         log_error "Invalid response from PyHSS on page ${PAGE}"
         break
     fi
 
-    if [ "$IS_VALID" -eq 0 ]; then
-        log_info "No more subscribers found. Sync complete."
+    if [ "$COUNT" -eq 0 ]; then
+        log_info "No more subscribers found on page ${PAGE}. Sync complete."
         break
     fi
 
+    # Sync this page
     sync_page "$PAGE_DATA" "$PAGE"
     EXIT=$?
 
-    if [ $EXIT -eq 1 ]; then
-        log_info "All pages fetched."
-        break
-    elif [ $EXIT -eq 2 ]; then
+    if [ $EXIT -eq 2 ]; then
         log_error "Stopping due to SQL error on page ${PAGE}"
         exit 1
     fi
 
-    TOTAL_SYNCED=$((TOTAL_SYNCED + IS_VALID))
+    TOTAL_SYNCED=$((TOTAL_SYNCED + COUNT))
+    log_info "Running total synced: ${TOTAL_SYNCED}"
 
-    # If page returned less than PAGE_SIZE, it's the last page
-    if [ "$IS_VALID" -lt "$PAGE_SIZE" ]; then
-        log_info "Last page reached (got $IS_VALID < $PAGE_SIZE)."
+    # If page returned less than PAGE_SIZE it's the last page
+    if [ "$COUNT" -lt "$PAGE_SIZE" ]; then
+        log_info "Last page reached (got $COUNT < $PAGE_SIZE)."
         break
     fi
 
@@ -138,13 +146,16 @@ TOTAL_DB=$(docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" "SELECT COUNT(*) 
 log_info "Total subscribers in OsmoHLR DB: ${TOTAL_DB}"
 
 echo ""
-log_info "Sample - first and last 5 subscribers:"
+log_info "Sample - first 5 subscribers:"
 docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" \
     "SELECT id, imsi, msisdn FROM subscriber ORDER BY id LIMIT 5;"
 echo "..."
+log_info "Sample - last 5 subscribers:"
 docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" \
     "SELECT id, imsi, msisdn FROM subscriber ORDER BY id DESC LIMIT 5;"
 
 echo ""
 log_info "Done! Restart OsmoHLR to apply changes:"
 echo "  docker restart ${OSMOHLR_CONTAINER} osmomsc"
+
+
