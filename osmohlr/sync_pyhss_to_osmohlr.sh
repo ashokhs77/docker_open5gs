@@ -157,5 +157,3 @@ docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" \
 echo ""
 log_info "Done! Restart OsmoHLR to apply changes:"
 echo "  docker restart ${OSMOHLR_CONTAINER} osmomsc"
-
-

@@ -501,11 +501,16 @@ services:
     build: ./mmsc
     image: mmsc
     container_name: mmsc
+    network_mode: host
     dns: ${DNS_IP}
     volumes:
       - ./mmsc/kannel.conf:/usr/local/kannel/etc/kannel.conf
       - ./mmsc/mbuni.conf:/usr/local/mbuni/etc/mbuni.conf
       - mms_storage:/tmp/mms-storage
+      - ./mmsc/nib_registry.conf:/etc/mmsc/nib_registry.conf
+      - ./mmsc/resolve_mmsc.sh:/etc/mmsc/resolve_mmsc.sh
+      - ./mmsc/mm4_receiver.py:/etc/mmsc/mm4_receiver.py
+      - ./mmsc/mmsc_init.sh:/mmsc_init.sh 
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
@@ -520,15 +525,16 @@ services:
       - "13013/tcp"
       - "8090/tcp"    # WAP gateway
       - "8181/tcp"    # Mbuni MMSC HTTP
-    ports:
-      - "8090:8090/tcp"
-      - "8181:8181/tcp"
-      - "13000:13000/tcp"
-      - "13001:13001/tcp"
-      - "13013:13013/tcp"
-    networks:
-      default:
-        ipv4_address: ${MMSC_IP}
+      - "25/tcp" 
+        #ports:
+        # - "8090:8090/tcp"
+        # - "8181:8181/tcp"
+        # - "13000:13000/tcp"
+        #- "13001:13001/tcp"
+        #- "13013:13013/tcp"
+        # networks:
+        #default:
+        #ipv4_address: ${MMSC_IP}
   metrics:
     build: ./metrics
     image: docker_metrics
