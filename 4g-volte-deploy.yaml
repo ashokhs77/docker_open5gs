@@ -171,8 +171,8 @@ services:
       - COMPONENT_NAME=mme
       - LD_LIBRARY_PATH=/usr/lib64
     volumes:
-      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
-      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./mme:/mnt/mme
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -330,8 +330,8 @@ services:
     container_name: icscf
     dns: ${DNS_IP}
     volumes:
-      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
-      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./icscf:/mnt/icscf
       - ./icscf/dispatcher.list:/etc/kamailio_icscf/dispatcher.list:ro
       - /etc/timezone:/etc/timezone:ro
@@ -361,8 +361,8 @@ services:
     container_name: scscf
     dns: ${DNS_IP}
     volumes:
-      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
-      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./scscf:/mnt/scscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -395,8 +395,8 @@ services:
     cap_add:
       - NET_ADMIN
     volumes:
-      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
-      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./pcscf:/mnt/pcscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
@@ -436,8 +436,8 @@ services:
     container_name: smsc
     dns: ${DNS_IP}
     volumes:
-      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
-      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
       - ./smsc:/mnt/smsc
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro

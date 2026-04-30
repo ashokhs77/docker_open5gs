@@ -78,7 +78,7 @@ RUN ldconfig
 
 # Get open5gs code and install
 RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && \
-    git checkout  142951f98a687bc1bee05d3efa33ccceeffbc21e && \
+     git checkout  ca0a9b3b65f90c78f91a0dc48845eddef3af3a1b && \
     if [ "$LICENSE" = "OFF" ]; then \
         echo "Disabling MME License"; \
         sed -i "s/, *'-DENABLE_LICENSE_CHECK'//g" src/mme/meson.build; \
