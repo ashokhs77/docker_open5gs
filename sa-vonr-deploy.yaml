@@ -16,17 +16,23 @@ services:
     networks:
       default:
         ipv4_address: ${MONGO_IP}
+  # Open5GS WebUI — 5G SA ONLY.
+  # This service uses a dedicated image (docker_open5gs_webui) built from
+  # ./webui/Dockerfile, independent of the shared docker_open5gs base image.
+  # It is referenced ONLY from sa-vonr-deploy.yaml and never from
+  # 4g-volte-deploy.yaml, so 4G deployments are not affected.
   webui:
-    image: docker_open5gs
+    build: ./webui
+    image: docker_open5gs_webui
     container_name: webui
+    dns: ${DNS_IP}
     depends_on:
       - mongo
     env_file:
       - .env
     environment:
-      - COMPONENT_NAME=webui
+      - MONGO_IP=${MONGO_IP}
     volumes:
-      - ./webui:/mnt/webui
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
@@ -182,8 +188,8 @@ services:
       - "2152/udp"
       - "8805/udp"
       - "9091/tcp"
-    # ports:
-    #   - "2152:2152/udp"
+    ports:
+      - "${DOCKER_HOST_IP}:2152:2152/udp"
     cap_add:
       - NET_ADMIN
     privileged: true
@@ -217,8 +223,8 @@ services:
       - "38412/sctp"
       - "7777/tcp"
       - "9091/tcp"
-    # ports:
-    #   - "38412:38412/sctp"
+    ports:
+      - "38412:38412/sctp"
     networks:
       default:
         ipv4_address: ${AMF_IP}
@@ -297,9 +303,9 @@ services:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     expose:
-      - "9090/tcp"
+      - "${METRICS_BIND_PORT}/tcp"
     ports:
-      - "9090:9090/tcp"
+      - "${METRICS_BIND_PORT}:${METRICS_BIND_PORT}/tcp"
     networks:
       default:
         ipv4_address: ${METRICS_IP}
@@ -322,6 +328,7 @@ services:
     build: ./rtpengine
     image: docker_rtpengine
     container_name: rtpengine
+    network_mode: host
     privileged: true
     env_file:
       - .env
@@ -340,12 +347,6 @@ services:
       - PORT_MIN=49000
       - NO_FALLBACK=no
       - TOS=184
-    expose:
-      - "2223/udp"
-      # - "49000-50000/udp"
-    networks:
-      default:
-        ipv4_address: ${RTPENGINE_IP}
   mysql:
     build: ./mysql
     image: docker_mysql
@@ -362,6 +363,8 @@ services:
       default:
         ipv4_address: ${MYSQL_IP}
   pyhss:
+    environment: 
+      - TZ=Asia/Kolkata
     build: ./pyhss
     image: docker_pyhss
     container_name: pyhss
@@ -391,6 +394,7 @@ services:
     dns: ${DNS_IP}
     volumes:
       - ./icscf:/mnt/icscf
+      - ./icscf/dispatcher.list:/etc/kamailio_icscf/dispatcher.list:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     env_file:
@@ -406,6 +410,9 @@ services:
       - "${ICSCF_BIND_PORT}/sctp"
       - "4060/udp"
       - "4060/tcp"
+    ports:
+      - "4060:4060/udp"
+      - "4060:4060/tcp"
     networks:
       default:
         ipv4_address: ${ICSCF_IP}
@@ -417,6 +424,7 @@ services:
       - ./scscf:/mnt/scscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - /var/log/kamailio:/cdr-logs
     env_file:
       - .env
     environment:
@@ -430,6 +438,9 @@ services:
       - "${SCSCF_BIND_PORT}/sctp"
       - "6060/udp"
       - "6060/tcp"
+    ports:
+      - "6060:6060/udp"
+      - "6060:6060/tcp"
     networks:
       default:
         ipv4_address: ${SCSCF_IP}
@@ -455,15 +466,22 @@ services:
       - rtpengine
       - icscf
       - scscf
-    expose:
-      - "${PCSCF_BIND_PORT}/tcp"
-      - "${PCSCF_BIND_PORT}/sctp"
-      - "5060/tcp"
-      - "5060/udp"
-      # - "5100-5120/tcp"
-      # - "5100-5120/udp"
-      # - "6100-6120/tcp"
-      # - "6100-6120/udp"
+        #expose:
+        #- "${PCSCF_BIND_PORT}/tcp"
+        #- "${PCSCF_BIND_PORT}/sctp"
+        #- "5060/tcp"
+        #- "5060/udp"
+        #- "5100-5120/tcp"
+        # - "5100-5120/udp"
+        #- "6100-6120/tcp"
+        #- "6100-6120/udp"
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "5100-5120:5100-5120/tcp"
+      - "5100-5120:5100-5120/udp"
+      - "6100-6120:6100-6120/tcp"
+      - "6100-6120:6100-6120/udp"
     networks:
       default:
         ipv4_address: ${PCSCF_IP}
