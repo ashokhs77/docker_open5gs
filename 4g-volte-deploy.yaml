@@ -513,6 +513,7 @@ services:
       - ./mmsc/mmsc_init.sh:/mmsc_init.sh 
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+    entrypoint: ["bash", "-c", "chmod 777 /etc/mmsc/resolve_mmsc.sh && bash /mmsc_init.sh"]
     env_file:
       - .env
     environment:

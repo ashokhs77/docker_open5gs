@@ -64,4 +64,4 @@ COPY mbuni.conf /usr/local/mbuni/etc/mbuni.conf
 COPY mmsc_init.sh /mmsc_init.sh
 RUN chmod +x /mmsc_init.sh
 
-CMD ["/mmsc_init.sh"]
+CMD ["bash","/mmsc_init.sh"]
