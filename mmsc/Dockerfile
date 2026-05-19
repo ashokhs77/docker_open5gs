@@ -33,8 +33,11 @@ RUN wget --no-check-certificate https://www.kannel.org/download/1.5.0/gateway-1.
 
 WORKDIR /opt/gateway-1.5.0
 
-RUN CFLAGS="-fcommon -fPIC" ./configure --prefix=/usr/local/kannel \
-    --with-ssl=/usr && \
+RUN CFLAGS="-fcommon -fPIC -I/usr/include/openssl" \
+    LDFLAGS="-L/usr/lib/x86_64-linux-gnu -lssl -lcrypto" \
+    ./configure --prefix=/usr/local/kannel \
+    --with-ssl=/usr \
+    --enable-ssl && \
     make && \
     make install
 
@@ -51,9 +54,20 @@ RUN ln -s /usr/bin/automake /usr/bin/automake-1.9 && \
     ./bootstrap && \
     ./configure --prefix=/usr/local/mbuni \
     --with-kannel-dir=/usr/local/kannel \
-    CFLAGS="-fcommon" && \
-    make && \
-    make install
+    CFLAGS="-fcommon" 
+
+# Increase MAX_MESSAGE_SIZE from 100KB to 10MB for high quality photos/videos
+RUN sed -i 's/#define MAX_MESSAGE_SIZE 100\*1024/#define MAX_MESSAGE_SIZE 10*1024*1024/' \
+    /opt/mbuni-1.6.0/mmsc/mmsproxy.c && \
+    grep "MAX_MESSAGE_SIZE" /opt/mbuni-1.6.0/mmsc/mmsproxy.c | head -3
+
+# Always use MAX_MESSAGE_SIZE, ignore UAProf size limit
+RUN sed -i 's/prof ? mms_ua_maxmsgsize(prof) : MAX_MESSAGE_SIZE/MAX_MESSAGE_SIZE/g' \
+    /opt/mbuni-1.6.0/mmsc/mmsproxy.c && \
+    grep -n "MAX_MESSAGE_SIZE\|mms_ua_maxmsgsize" \
+    /opt/mbuni-1.6.0/mmsc/mmsproxy.c | head -5
+
+RUN make && make install
 
 RUN mkdir -p /usr/local/kannel/etc \
     /usr/local/mbuni/etc \
