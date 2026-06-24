@@ -8,3 +8,8 @@ CREATE TABLE `messages` (
 );
 
 INSERT INTO version (table_name, table_version) values ('messages','1');
+
+CREATE TABLE IF NOT EXISTS `pending_ue` (
+    `callee` VARCHAR(64) NOT NULL,
+    UNIQUE KEY `unique_callee` (`callee`)
+);
