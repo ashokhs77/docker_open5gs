@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-1: Unauthenticated SIP REGISTER
+  Sends a REGISTER with no Authorization header to verify the IMS stack
+  enforces authentication — it must respond with 401 Unauthorized
+  (WWW-Authenticate challenge), never with 200 OK or any 5xx.
+
+  A 200 OK without authentication is a critical security failure.
+  A 5xx indicates the P-CSCF crashes or errors on a basic unauthenticated
+  request, which is also unacceptable.
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_unauth_register.xml \
+         -i [LOCAL_IP] -p 9310 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: Unauthenticated REGISTER">
+
+  <send retrans="500">
+    <![CDATA[
+      REGISTER sip:IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876540001@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 REGISTER
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Expires: 3600
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- IMS must challenge with 401 Unauthorized — auth enforcement check.
+       Any non-401 response (200 OK = critical fail, 5xx = crash) is caught
+       by the test script's output grep logic. -->
+  <recv response="401" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

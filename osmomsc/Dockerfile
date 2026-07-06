@@ -29,13 +29,16 @@ FROM debian:bookworm
 ENV DEBIAN_FRONTEND=noninteractive
 ENV OSMOCOM_REPO="https://downloads.osmocom.org/packages/osmocom:/latest/Debian_12"
 
-# Install updates and dependencies
 RUN apt-get update && \
-    apt-get -y install wget gnupg telnet
-
-RUN wget $OSMOCOM_REPO/Release.key && \
+    apt-get -y install --no-install-recommends ca-certificates wget gnupg telnet && \
+    wget $OSMOCOM_REPO/Release.key && \
     mv Release.key /etc/apt/trusted.gpg.d/osmocom-latest.asc && \
     echo "deb [signed-by=/etc/apt/trusted.gpg.d/osmocom-latest.asc] $OSMOCOM_REPO/ ./" > /etc/apt/sources.list.d/osmocom-latest.list && \
-    apt-get update && apt-get install -f && apt-get --install-suggests -y install osmo-msc
+    apt-get update && \
+    apt-get -y install --no-install-recommends osmo-msc && \
+    apt-get purge -y --auto-remove wget gnupg && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
 
 CMD ["/mnt/osmomsc/osmomsc_init.sh"]
+

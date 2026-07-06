@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+<!--
+  Parametrized SMS send to an arbitrary recipient (= [service], i.e. -s <number>).
+  Used to exercise the SMSC recipient guard in route[SMS]: a valid MSISDN
+  (10-digit, or 91+10-digit) is stored; a malformed number (e.g. 8-digit) is
+  rejected before storage. Sender is the usual test MSISDN 9876540700.
+-->
+<scenario name="SMS Send To recipient">
+  <send retrans="500">
+    <![CDATA[
+      MESSAGE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 MESSAGE
+      P-Asserted-Identity: <sip:9876540700@[local_ip]>
+      Content-Type: text/plain
+      Content-Length: [len]
+
+      Recipient guard test
+    ]]>
+  </send>
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="200" timeout="10000"/>
+</scenario>

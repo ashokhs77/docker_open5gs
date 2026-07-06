@@ -1,3 +1,4 @@
-# Freeswitch conference servers
-#1 sip:10.2.110.197:5092 0 0
+# Inter-NIB FreeSWITCH conference peers
+#1 sip:10.2.110.231:5092 0 0
 #2 sip:10.2.110.178:5092 0 0
+

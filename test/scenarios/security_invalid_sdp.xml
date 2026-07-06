@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-8: INVITE with invalid SDP — no media (m=) lines
+  Sends an INVITE directly to FreeSWITCH at port 5090 with an SDP body
+  that contains only session-level fields (v/o/s/t) but no m= media lines.
+  RFC 3264 §5: an offer with no media streams is illegal; the answering
+  entity MUST reject it with 488 Not Acceptable Here.
+
+  This validates the media stack (FreeSWITCH) handles incomplete/malformed
+  SDP bodies without crashing. Attackers may send invalid SDP to:
+    - Crash or confuse media proxies / B2BUAs
+    - Bypass codec negotiation to inject arbitrary media streams
+
+  Uses fs_direct_invite.xml style: [remote_ip]:[remote_port] in Request-URI,
+  no Route headers — direct call to FreeSWITCH, bypassing IMS routing chain.
+
+  Expected: 488 Not Acceptable Here (FS rejects missing media offer)
+  Acceptable: 400 Bad Request (strict SDP parser)
+  Fail: 5xx crash, or 200 OK (call accepted with no media negotiated)
+
+  Run with:
+    sipp FS_IP:5090 -sf security_invalid_sdp.xml -s 1010 \
+         -i [LOCAL_IP] -p 9317 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: INVITE with invalid SDP (no media lines)">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=Security Invalid SDP Test
+      c=IN IP4 [local_ip]
+      t=0 0
+    ]]>
+  </send>
+
+  <!-- FreeSWITCH must reject invalid SDP with 488 Not Acceptable Here.
+       400 Bad Request is also acceptable.
+       Non-zero SIPp exit on unexpected 4xx handled by test script. -->
+  <recv response="488" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

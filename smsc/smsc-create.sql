@@ -13,3 +13,4 @@ CREATE TABLE IF NOT EXISTS `pending_ue` (
     `callee` VARCHAR(64) NOT NULL,
     UNIQUE KEY `unique_callee` (`callee`)
 );
+

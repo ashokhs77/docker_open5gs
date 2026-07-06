@@ -31,8 +31,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PROMETHEUS_VERSION=3.5.0
 
 RUN apt-get update && \
-    apt-get install -y wget && \
+    apt-get install -y --no-install-recommends wget ca-certificates && \
     wget -q https://github.com/prometheus/prometheus/releases/download/v$PROMETHEUS_VERSION/prometheus-$PROMETHEUS_VERSION.linux-$(dpkg --print-architecture).tar.gz && \
-    tar xvfz prometheus-$PROMETHEUS_VERSION.linux-$(dpkg --print-architecture).tar.gz
+    tar xzf prometheus-$PROMETHEUS_VERSION.linux-$(dpkg --print-architecture).tar.gz && \
+    rm -f prometheus-$PROMETHEUS_VERSION.linux-$(dpkg --print-architecture).tar.gz && \
+    apt-get purge -y --auto-remove wget && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
 
 CMD ["/mnt/metrics/metrics_init.sh"]
+

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  VoLTE Load Test - UAC (Caller) side
+  Sends INVITE through P-CSCF → I-CSCF → S-CSCF → P-CSCF → UE-B (UAS).
+  Tests the FULL IMS signaling chain capacity for voice calls (QCI 1).
+  Each call gets a unique caller ID via [call_number].
+
+  The IMS_DOMAIN placeholder is replaced at runtime via sed.
+
+  Usage:
+    sipp PCSCF_IP:5060 -sf load_volte_uac.xml -i LOCAL_IP -p 9100 -r RATE -l LIMIT -m TOTAL
+-->
+<scenario name="VoLTE Load UAC">
+
+  <!-- INVITE to UE-B (9876541000) through P-CSCF → IMS chain -->
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:9876541000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540[call_number]@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540[call_number]@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp [call_number] 1 IN IP4 [local_ip]
+      s=VoLTE Load Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio [auto_media_port] RTP/AVP 96 8 0
+      a=rtpmap:96 AMR-WB/16000
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <!-- Expect provisional responses (100/180/183) -->
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="180" optional="true" timeout="5000"/>
+  <recv response="183" optional="true" timeout="5000"/>
+
+  <!-- Expect 200 OK from UE-B (via IMS chain) -->
+  <recv response="200" rtd="true" timeout="15000" rrs="true"/>
+
+  <!-- ACK with Record-Route -->
+  <send>
+    <![CDATA[
+      ACK [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540[call_number]@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Hold for 5 seconds (simulates call duration) -->
+  <pause milliseconds="5000"/>
+
+  <!-- BYE with Record-Route -->
+  <send retrans="500">
+    <![CDATA[
+      BYE [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540[call_number]@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv response="200" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000, 2000, 5000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+</scenario>

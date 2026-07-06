@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-2: INVITE to unprovisioned subscriber
+  Sends INVITE to sip:0000000000@IMS_DOMAIN — a subscriber that does not
+  exist in the HSS/PyHSS database. IMS must return 4xx (404 Not Found,
+  480 Temporarily Unavailable, or 403 Forbidden), never 5xx or 2xx.
+
+  A 5xx response would indicate an unhandled exception in S-CSCF or PyHSS
+  when the subscriber lookup returns empty — a potential crash vector.
+  A 2xx would indicate a routing leak to a non-existent destination.
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+  SIPp automatically sends ACK for non-2xx INVITE responses (RFC 3261).
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_unknown_invite.xml \
+         -i [LOCAL_IP] -p 9311 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: INVITE to unknown subscriber">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:0000000000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:0000000000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=Security Unknown Subscriber Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 20010 RTP/AVP 8 0
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <!-- IMS must return 4xx for non-existent subscriber.
+       Most likely: 404 Not Found (PyHSS lookup miss).
+       Also acceptable: 401 challenge, 403 Forbidden, 480 Unavailable.
+       Non-zero SIPp exit on unexpected 4xx is handled by the test script. -->
+  <recv response="404" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

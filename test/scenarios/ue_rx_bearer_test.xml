@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Rx Bearer Validation Test (UAC):
+  Sends INVITE to conf-factory with IMEI in Contact header.
+  This triggers Rx AAR from P-CSCF to PCRF for dedicated bearer setup.
+
+  The +sip.instance IMEI header is required for P-CSCF to treat this
+  as a real IMS client and trigger Rx media authorization (AAR/AAA).
+  Without it, P-CSCF skips Rx with "Non-IMS SIP client".
+
+  Test validates:
+  1. INVITE succeeds (200 OK from FreeSWITCH via P-CSCF)
+  2. P-CSCF triggers Rx AAR (verified by checking pcscf logs)
+  3. BYE triggers Rx STR (session termination)
+
+  IMS_DOMAIN placeholder is replaced by test script via sed.
+-->
+<scenario name="Rx Bearer Validation INVITE">
+
+  <!-- Send INVITE with IMEI in Contact (triggers Rx AAR) -->
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:mmtel@conf-factory.IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:mmtel@conf-factory.IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540700@[local_ip]:[local_port]>;+sip.instance="<urn:gsma:imei:35693803-564380-0>";+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"
+      Allow: INVITE,ACK,BYE,CANCEL,UPDATE,REFER,NOTIFY
+      Supported: timer, 100rel
+      P-Access-Network-Info: 3GPP-E-UTRAN-FDD;utran-cell-id-3gpp=0010100010000101
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=Rx Bearer Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 20000 RTP/AVP 96 8 0
+      a=rtpmap:96 AMR-WB/16000
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <!-- Expect 100 Trying (optional) -->
+  <recv response="100" optional="true" timeout="5000"/>
+
+  <!-- Expect 200 OK from FreeSWITCH (via P-CSCF) -->
+  <recv response="200" rtd="true" timeout="15000" rrs="true" />
+
+  <!-- Send ACK -->
+  <send>
+    <![CDATA[
+      ACK [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:mmtel@conf-factory.IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Hold call for 3 seconds to allow Rx AAR/AAA exchange -->
+  <pause milliseconds="3000"/>
+
+  <!-- Send BYE (triggers Rx STR) -->
+  <send retrans="500">
+    <![CDATA[
+      BYE [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:mmtel@conf-factory.IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Expect 200 OK to BYE -->
+  <recv response="200" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 30, 40, 50, 100, 150, 200"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+</scenario>

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Inter-NIB Conference INVITE — join a conference room at an external IMS domain.
+  Sends INVITE to sip:1010@external.example through P-CSCF/I-CSCF.
+  The I-CSCF must attempt to resolve and route the conference URI inter-domain
+  without returning a 5xx error (which would indicate a routing config failure).
+  A 4xx or timeout is acceptable; no real external conference server is present.
+
+  Also tests inviting an external participant INTO the local conference by sending
+  INVITE from the local domain to an external URI — modelling the REFER-Replaces
+  or 3PCC conference expansion path.
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+-->
+<scenario name="Inter-NIB Conference INVITE">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:1010@external.example SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:1010@external.example>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=- [call_number] [call_number] IN IP4 [local_ip]
+      s=Inter-NIB Conference Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 9340 RTP/AVP 96 0 8
+      a=rtpmap:96 AMR/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:8 PCMA/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="180" optional="true" timeout="8000"/>
+  <recv response="183" optional="true" timeout="8000"/>
+  <recv response="200" optional="true" timeout="5000"/>
+  <recv response="400" optional="true" timeout="8000"/>
+  <recv response="401" optional="true" timeout="5000"/>
+  <recv response="403" optional="true" timeout="5000"/>
+  <recv response="404" optional="true" timeout="8000"/>
+  <recv response="408" optional="true" timeout="8000"/>
+  <recv response="480" optional="true" timeout="8000"/>
+  <recv response="484" optional="true" timeout="5000"/>
+  <recv response="503" optional="true" timeout="8000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

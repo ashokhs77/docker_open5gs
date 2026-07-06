@@ -1,0 +1,9 @@
+.git
+.gitignore
+reports/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.log
+*.pcap
+*.pcapng

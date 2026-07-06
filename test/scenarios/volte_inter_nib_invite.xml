@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Inter-NIB VoLTE INVITE — callee unknown in local IMS domain.
+  Sends INVITE toward sip:+9990001234@IMS_DOMAIN through P-CSCF.
+  Routing path: P-CSCF → I-CSCF → (HSS: user unknown) → DISPATCHER_FALLBACK
+  → dispatcher set 1 (REMOTE_NIB_ICSCF_IP). This exercises the actual
+  dispatcher-based inter-NIB routing path.
+  Without a real remote NIB, the dispatcher target is unreachable and the
+  I-CSCF returns 480 or 503 — both are acceptable (PASS) for this test.
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+-->
+<scenario name="Inter-NIB VoLTE INVITE">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:+9990001234@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:+9990001234@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=- [call_number] [call_number] IN IP4 [local_ip]
+      s=VoLTE Inter-NIB Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 9321 RTP/AVP 96 0 8
+      a=rtpmap:96 AMR/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:8 PCMA/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <!-- Provisional responses while IMS routes to external NIB -->
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="180" optional="true" timeout="8000"/>
+  <recv response="183" optional="true" timeout="8000"/>
+
+  <!-- 4xx is acceptable — no real external NIB present -->
+  <recv response="400" optional="true" timeout="8000"/>
+  <recv response="401" optional="true" timeout="5000"/>
+  <recv response="403" optional="true" timeout="5000"/>
+  <recv response="404" optional="true" timeout="8000"/>
+  <recv response="408" optional="true" timeout="8000"/>
+  <recv response="480" optional="true" timeout="8000"/>
+  <recv response="484" optional="true" timeout="5000"/>
+  <recv response="503" optional="true" timeout="8000"/>
+
+  <!-- Accept 200 if something answers -->
+  <recv response="200" optional="true" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

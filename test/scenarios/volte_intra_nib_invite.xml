@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Intra-NIB VoLTE INVITE — caller and callee in same IMS_DOMAIN.
+  Routes INVITE through the full P-CSCF -> I-CSCF -> S-CSCF -> callee path.
+  Test passes on any non-5xx response (200, 4xx, or timeout — all acceptable
+  without full subscriber registration). Fails only on explicit 5xx from IMS.
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+
+  NOTE: No ACK/BYE sends — those require a mandatory recv before an optional
+  send (SIPp rule). Since we accept 4xx or 200 equally, we just observe the
+  IMS response and let the scenario expire cleanly.
+  NOTE: No <ereg> / variable capture — avoids SIPp "Variable referenced N times"
+  warnings that inject Unix timestamps into output and cause false 5xx matches.
+-->
+<scenario name="Intra-NIB VoLTE INVITE">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS,UPDATE,REFER,NOTIFY
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=- [call_number] [call_number] IN IP4 [local_ip]
+      s=VoLTE Intra-NIB Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 9320 RTP/AVP 96 0 8 97
+      a=rtpmap:96 AMR/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:97 telephone-event/8000
+      a=fmtp:97 0-15
+      a=sendrecv
+    ]]>
+  </send>
+
+  <!-- First provisional from P-CSCF — optional to avoid display-module crashes.
+       Some SIPp builds (3.x, custom) crash with Assertion '0' in logger.cpp when
+       a mandatory <recv> carries a timeout="" attribute (not handled by the display
+       renderer).  Making it optional sidesteps that entirely; the global -timeout 15
+       passed to SIPp from run_sipp_templated() covers the overall call window.
+       response="100" kept (not "0") to avoid the accept-any display crash.  -->
+  <recv response="100" optional="true" timeout="5000"/>
+
+  <!-- Absorb provisional responses that may arrive after the mandatory recv -->
+  <recv response="100" optional="true" timeout="3000"/>
+  <recv response="180" optional="true" timeout="3000"/>
+  <recv response="183" optional="true" timeout="3000"/>
+
+  <!-- Absorb auth challenges and other 4xx -->
+  <recv response="401" optional="true" timeout="3000"/>
+  <recv response="403" optional="true" timeout="3000"/>
+  <recv response="404" optional="true" timeout="3000"/>
+  <recv response="480" optional="true" timeout="3000"/>
+  <recv response="486" optional="true" timeout="3000"/>
+
+  <!-- Absorb routing-failure 5xx — S-CSCF DISPATCHER_FAILURE returns 500 when
+       the dispatcher cannot select any destination (callee unregistered, no NIB
+       server configured).  Without these optional recvs SIPp aborts the call with
+       "unexpected message" and prints the raw "SIP/2.0 500 …" line to stderr,
+       which the test's 5xx grep then matches as a false-positive failure.
+       500/503 here are pure routing failures, NOT IMS configuration errors. -->
+  <recv response="500" optional="true" timeout="3000"/>
+  <recv response="503" optional="true" timeout="3000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

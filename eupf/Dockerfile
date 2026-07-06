@@ -24,18 +24,28 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:jammy
+FROM ubuntu:jammy AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install updates and dependencies
+# Install build dependencies only in the builder stage.
 RUN apt-get update && \
-    apt-get -y install wget git clang llvm gcc-multilib libbpf-dev \
-    net-tools iputils-ping git ifupdown iperf iptables
+    apt-get -y install --no-install-recommends \
+        ca-certificates \
+        clang \
+        git \
+        gcc-multilib \
+        libbpf-dev \
+        llvm \
+        make \
+        pkg-config \
+        wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Golang
 RUN rm -rf /usr/local/go && wget https://go.dev/dl/go1.22.4.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.22.4.linux-amd64.tar.gz
+    tar -C /usr/local -xzf go1.22.4.linux-amd64.tar.gz && \
+    rm -f go1.22.4.linux-amd64.tar.gz
 
 ENV PATH="/usr/local/go/bin:${PATH}"
 
@@ -44,12 +54,35 @@ RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
 
 # Get eupf, compile and install
 RUN export PATH=$(go env GOPATH)/bin:${PATH} && \
-    git clone https://github.com/edgecomllc/eupf.git && \
-    cd eupf && git checkout tags/v0.6.4 && \
+    git clone --depth 1 --branch v0.6.4 https://github.com/edgecomllc/eupf.git /eupf && \
+    cd /eupf && \
     go generate -v ./cmd/... && \
-    go build -v -o bin/eupf ./cmd/
+    go build -trimpath -ldflags="-s -w" -v -o bin/eupf ./cmd/
+
+FROM ubuntu:jammy
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get -y install --no-install-recommends \
+        ca-certificates \
+        ifupdown \
+        iperf \
+        iproute2 \
+        iptables \
+        iputils-ping \
+        libbpf0 \
+        libelf1 \
+        net-tools \
+        zlib1g && \
+    apt-get autoremove -y && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /eupf/bin/eupf /eupf/bin/eupf
 
 # Set the working directory to eupf
 WORKDIR /eupf
 
 CMD ["/mnt/eupf/eupf_init.sh"]
+

@@ -73,4 +73,27 @@ sleep 5
 python3 diameterService.py &
 # Sleep is needed to let db be populated in a non-overlapping fashion
 sleep 5
+
+if [ -n "${PYHSS_HSS_SERVICE_WORKERS:-}" ]; then
+	HSS_SERVICE_WORKERS="$PYHSS_HSS_SERVICE_WORKERS"
+else
+	_CPU_COUNT="$(nproc 2>/dev/null || echo 2)"
+	HSS_SERVICE_WORKERS=$((_CPU_COUNT * 4))
+	[ "$HSS_SERVICE_WORKERS" -lt 4 ] && HSS_SERVICE_WORKERS=4
+	[ "$HSS_SERVICE_WORKERS" -gt 32 ] && HSS_SERVICE_WORKERS=32
+fi
+
+if ! [[ "$HSS_SERVICE_WORKERS" =~ ^[0-9]+$ ]] || [ "$HSS_SERVICE_WORKERS" -lt 1 ]; then
+	HSS_SERVICE_WORKERS=4
+fi
+
+echo "Starting ${HSS_SERVICE_WORKERS} PyHSS hssService worker(s)"
+
+worker_id=1
+while [ "$worker_id" -lt "$HSS_SERVICE_WORKERS" ]; do
+	python3 hssService.py &
+	worker_id=$((worker_id + 1))
+done
+
 exec python3 hssService.py $@
+

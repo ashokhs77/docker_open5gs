@@ -1,0 +1,18 @@
+# Dedicated 5G LOAD gNB #1 (second cell, for sharding past one gNB's ~256-UE
+# UERANSIM limit — e.g. the 512 burst target). Launched as nr-gnb-load-1 at
+# 172.22.1.212. See gnb_load_0.yaml.
+mcc: "001"
+mnc: "01"
+nci: "0x000000030"
+idLength: 32
+tac: 1
+linkIp: 172.22.1.212
+ngapIp: 172.22.1.212
+gtpIp: 172.22.1.212
+amfConfigs:
+  - address: 172.22.1.10
+    port: 38412
+slices:
+  - sst: 1
+    sd: 0x000001
+ignoreStreamIds: true

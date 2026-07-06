@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Intra-NIB ViLTE INVITE — caller and callee in same IMS_DOMAIN.
+  Offers both audio and video m-lines. S-CSCF must route it intra-domain
+  and P-CSCF must handle the video SDP (sdpops + RTPEngine).
+  Test passes on any non-5xx response. Fails on 5xx (IMS SDP handling error).
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+
+  NOTE: No ACK/BYE sends and no <ereg> — avoids SIPp structural errors and
+  timestamp-injection false positives in the 5xx detection grep.
+-->
+<scenario name="Intra-NIB ViLTE INVITE">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=- [call_number] [call_number] IN IP4 [local_ip]
+      s=ViLTE Intra-NIB Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 9330 RTP/AVP 96 0 8
+      b=AS:25
+      a=rtpmap:96 AMR/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:8 PCMA/8000
+      a=sendrecv
+      m=video 9332 RTP/AVP 100 101
+      b=AS:384
+      a=rtpmap:100 H264/90000
+      a=fmtp:100 profile-level-id=42C01F
+      a=rtpmap:101 H265/90000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <!-- Mandatory recv: waits for 100 Trying from P-CSCF.
+       Kamailio P-CSCF relays the 100 Trying from I-CSCF immediately.
+       response="0" (accept-any) triggers a display assertion crash in some
+       SIPp builds; response="100" is safe and matches expected P-CSCF behaviour. -->
+  <recv response="100" timeout="15000"/>
+
+  <!-- Absorb provisional responses that may arrive after the mandatory recv -->
+  <recv response="100" optional="true" timeout="3000"/>
+  <recv response="180" optional="true" timeout="3000"/>
+  <recv response="183" optional="true" timeout="3000"/>
+
+  <!-- Absorb auth challenges and routing 4xx.
+       NOTE: No recv for 488 here — if IMS actually sends 488 (Not Acceptable Here,
+       meaning video SDP was rejected), we want it to appear in SIPp's Message
+       Statistics section so the test grep \b488\b catches it as a TRUE positive.
+       Having an optional recv for 488 would instead inject "488" into SIPp's
+       scenario-screen labels regardless of whether a 488 was received, creating
+       a false positive. -->
+  <recv response="401" optional="true" timeout="3000"/>
+  <recv response="403" optional="true" timeout="3000"/>
+  <recv response="404" optional="true" timeout="3000"/>
+  <recv response="480" optional="true" timeout="3000"/>
+  <!-- Absorb routing failure 5xx (S-CSCF DISPATCHER_FAILURE when callee unregistered
+       returns 500/503; P-CSCF DNS failure returns 503). These are NOT video SDP errors. -->
+  <recv response="500" optional="true" timeout="3000"/>
+  <recv response="503" optional="true" timeout="3000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

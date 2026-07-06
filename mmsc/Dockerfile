@@ -1,8 +1,8 @@
-FROM debian:11
+FROM debian:11 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     autoconf \
     automake \
@@ -16,14 +16,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libmariadb-dev \
     libpcre3-dev \
-    libcurl4-openssl-dev \
-    msmtp \
-    msmtp-mta \
-    mailutils \
-    python3 \
-    python3-pip
-
-RUN pip3 install aiosmtpd
+    libcurl4-openssl-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
 
@@ -67,7 +61,30 @@ RUN sed -i 's/prof ? mms_ua_maxmsgsize(prof) : MAX_MESSAGE_SIZE/MAX_MESSAGE_SIZE
     grep -n "MAX_MESSAGE_SIZE\|mms_ua_maxmsgsize" \
     /opt/mbuni-1.6.0/mmsc/mmsproxy.c | head -5
 
-RUN make && make install
+RUN make && make install && \
+    (find /usr/local/kannel /usr/local/mbuni -type f \( -path '*/bin/*' -o -path '*/sbin/*' -o -name '*.so*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true)
+
+FROM debian:11
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libcurl4 \
+    libmariadb3 \
+    libpcre3 \
+    libssl1.1 \
+    libxml2 \
+    msmtp \
+    msmtp-mta \
+    python3 \
+    python3-pip && \
+    pip3 install --no-cache-dir aiosmtpd && \
+    apt-get purge -y --auto-remove python3-pip && \
+    rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
+
+COPY --from=builder /usr/local/kannel /usr/local/kannel
+COPY --from=builder /usr/local/mbuni /usr/local/mbuni
 
 RUN mkdir -p /usr/local/kannel/etc \
     /usr/local/mbuni/etc \
@@ -79,3 +96,4 @@ COPY mmsc_init.sh /mmsc_init.sh
 RUN chmod +x /mmsc_init.sh
 
 CMD ["bash","/mmsc_init.sh"]
+

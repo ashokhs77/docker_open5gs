@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  ViLTE Load Test - UAC (Caller) side
+  Same as VoLTE UAC but with video+audio SDP (QCI 2).
+  Tests IMS signaling chain capacity for video calls.
+
+  Usage:
+    sipp PCSCF_IP:5060 -sf load_vilte_uac.xml -i LOCAL_IP -p 9200 -r RATE -l LIMIT -m TOTAL
+-->
+<scenario name="ViLTE Load UAC">
+
+  <!-- INVITE with video+audio SDP through P-CSCF → IMS chain -->
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:9876541000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540[call_number]@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540[call_number]@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp [call_number] 1 IN IP4 [local_ip]
+      s=ViLTE Load Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio [auto_media_port] RTP/AVP 96 8 0
+      a=rtpmap:96 AMR-WB/16000
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendrecv
+      m=video 30000 RTP/AVP 97
+      a=rtpmap:97 H264/90000
+      a=fmtp:97 profile-level-id=42e01e;packetization-mode=1
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="180" optional="true" timeout="5000"/>
+  <recv response="183" optional="true" timeout="5000"/>
+  <recv response="200" rtd="true" timeout="15000" rrs="true"/>
+
+  <send>
+    <![CDATA[
+      ACK [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540[call_number]@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <pause milliseconds="5000"/>
+
+  <send retrans="500">
+    <![CDATA[
+      BYE [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540[call_number]@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv response="200" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000, 2000, 5000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+</scenario>

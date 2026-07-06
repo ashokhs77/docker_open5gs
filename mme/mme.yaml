@@ -59,5 +59,18 @@ mme:
       enabled: True
       allowed_states: [ WHITELIST, BLACKLIST, GREYLIST ]
     time:
+      message:
+        # Match SGW-C/SMF transaction window so burst attaches do not trigger
+        # premature S11 Create Session retransmits while PFCP/session work is
+        # still completing under load.
+        duration: 20000
       t3412:
-        value: 540
+        # Periodic TAU interval.  3GPP TS 24.008 default is 54 minutes (3240 s).
+        # The original value of 540 s (9 min) caused excessive periodic TAU
+        # traffic on MME under load.  3240 s is the correct production value
+        # and reduces MME background load with no negative impact on real UEs.
+        # NOTE: t3450 / t3460 / t3470 are intentionally NOT set here.
+        # They default to 6000 ms in Open5GS which is the correct 3GPP value.
+        # Raising them is not production-safe (breaks UE error recovery timing).
+        value: 3240
+

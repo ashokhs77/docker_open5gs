@@ -7,9 +7,9 @@
 	AcceptUnknownPeers="1"
 	DropUnknownOnDisconnect="1"
 	Tc="30"
-	Workers="8"
-	QueueLength="16"
-	TransactionTimeout="10"
+	Workers="16"
+	QueueLength="256"
+	TransactionTimeout="15"
 	SessionsHashSize="128"
 	DefaultAuthSessionTimeout="REGISTRATION_EXPIRES_ENV"
 	MaxAuthSessionTimeout="REGISTRATION_EXPIRES_ENV"
@@ -24,3 +24,4 @@
 	<DefaultRoute FQDN="hss.IMS_DOMAIN" metric="10"/>
 
 </DiameterPeer>
+

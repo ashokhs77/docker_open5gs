@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+<scenario name="SMS Send Test">
+  <send retrans="500">
+    <![CDATA[
+      MESSAGE sip:9876541000@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@[local_ip]>;tag=[call_number]
+      To: <sip:9876541000@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 MESSAGE
+      P-Asserted-Identity: <sip:9876540700@[local_ip]>
+      Content-Type: text/plain
+      Content-Length: [len]
+
+      Test SMS from integration test suite
+    ]]>
+  </send>
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="200" timeout="10000"/>
+</scenario>

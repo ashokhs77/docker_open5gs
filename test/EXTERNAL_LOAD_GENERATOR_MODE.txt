@@ -1,0 +1,182 @@
+External Load Generator Mode
+============================
+
+Purpose
+-------
+
+The default test-suite topology is still internal mode:
+
+  Core/IMS containers + test runner container on the same Docker host/VM.
+
+External load generator mode lets the same test runner run from a separate
+Linux VM while targeting a Core/IMS deployment on another VM. This is useful
+when you want the Core/IMS capacity number to include less test-runner CPU,
+memory, and packet-generation overhead on the system under test.
+
+This mode is not a diluted pass mode. It changes where traffic is generated.
+If Core/IMS fails at a given attach, data, VoLTE, or ViLTE load, the failure is
+still reported. On better hardware, the load tests should be able to climb to
+higher limits before failing.
+
+Modes
+-----
+
+1. Internal mode, default
+
+   Run from the Core/IMS VM:
+
+     cd ~/docker_open5gs/test
+     sudo docker compose -f docker-compose.test.yaml run --remove-orphans sipp-test
+
+   The test runner joins docker_open5gs_default and uses the normal service
+   container IPs such as 172.22.1.21 for P-CSCF.
+
+2. External generator mode
+
+   Run from a separate generator VM:
+
+     cd ~/docker_open5gs/test
+     cp env.external-generator.example .env.external-generator
+     set -a
+     . ./.env.external-generator
+     set +a
+     sudo docker compose -f docker-compose.test.yaml --profile external \
+       run --remove-orphans sipp-test-external
+
+   The test runner uses host networking on the generator VM. It does not join
+   the Core/IMS Docker bridge. All Core/IMS endpoint variables must therefore
+   point to addresses reachable from the generator VM.
+
+Network Reachability
+--------------------
+
+External mode supports either of these patterns:
+
+A. Routed container-subnet pattern
+
+   The generator VM can route directly to the Core/IMS Docker subnet.
+   Keep variables such as:
+
+     PCSCF_IP=172.22.1.21
+     MME_IP=172.22.1.9
+     PYHSS_IP=172.22.1.18
+
+   This is the most faithful topology, because the tests still target the same
+   service IPs used in internal mode.
+
+B. Published-host-port pattern
+
+   The Core/IMS VM publishes or host-routes each required service port.
+   Set variables to the Core/IMS VM host IP, or to service-specific routed IPs:
+
+     CORE_VM_HOST=192.168.56.5
+     PCSCF_IP=192.168.56.5
+     MME_IP=192.168.56.5
+     PYHSS_IP=192.168.56.5
+
+   This only works if the relevant ports are reachable on those addresses.
+   If several services use the same port, use routed container IPs instead of a
+   single host IP.
+
+Minimum Endpoint Variables
+--------------------------
+
+  TEST_TOPOLOGY=external
+  CORE_TARGET_LABEL=core-vm-lab
+  CORE_VM_HOST=192.168.56.5
+  LOCAL_IP=<generator-vm-ip>
+  PCSCF_IP=<reachable P-CSCF IP>
+  PCSCF_PORT=5060
+  MME_IP=<reachable MME S1AP IP>
+  MME_PORT=36412
+  PYHSS_IP=<reachable PyHSS IP>
+  PYHSS_REST_PORT=8080
+  DNS_IP=<reachable DNS IP>
+  ICSCF_IP=<reachable I-CSCF IP>
+  SCSCF_IP=<reachable S-CSCF IP>
+  FREESWITCH_IP=<reachable FreeSWITCH IP>
+  SMSC_IP=<reachable SMSC IP>
+  MMSC_IP=<reachable MMSC IP>
+  MYSQL_IP=<reachable MySQL IP>
+  RTPENGINE_IP=<reachable RTPengine control IP>
+  UPF_IP=<reachable UPF test/iperf IP>
+
+LOCAL_IP is the generator VM address that Core/IMS can route back to. The suite
+uses it for SIPp bind addresses, SIP Contact/Via values, and UE simulator local
+transport. If LOCAL_IP is not set in external mode, common.sh tries to detect it
+from the route to PCSCF_IP, then falls back to 172.22.1.200 with a warning.
+
+Container Evidence and Docker Host
+----------------------------------
+
+A release-level --bundle all run uses Docker for container checks, logs, docker exec checks, and
+cgroup resource checkpoints. In internal mode, /var/run/docker.sock points to
+the Core/IMS Docker daemon.
+
+In external mode, /var/run/docker.sock points to the generator VM Docker daemon
+unless you configure Docker remote access. Endpoint traffic tests can still run,
+but complete container evidence needs the generator to access the Core/IMS Docker
+daemon.
+
+Optional Docker hook:
+
+  DOCKER_HOST=tcp://<core-docker-host>:2376
+
+Use TLS or another secured Docker remote-access method if this is enabled. Do
+not expose an unauthenticated Docker TCP socket on a lab or production network.
+The Docker CLI inside the test container honors DOCKER_HOST.
+
+Resource Accounting
+-------------------
+
+The test suite itself consumes CPU, memory, socket state, and packet-generation
+capacity. In internal mode that load is on the same VM as Core/IMS, so measured
+capacity is conservative for that host. In external mode, most packet-generation
+overhead moves to the generator VM, so the Core/IMS VM measurement is cleaner.
+
+Resource reports include the runner container by default when it is visible to
+the Docker daemon:
+
+  INCLUDE_TEST_CONTAINER_STATS=1
+
+Recommended Runs
+----------------
+
+Smoke external reachability:
+
+  sudo docker compose -f docker-compose.test.yaml --profile external \
+    run --remove-orphans sipp-test-external --feature regression --test 18
+
+Load and capacity:
+
+  sudo docker compose -f docker-compose.test.yaml --profile external \
+    run --remove-orphans sipp-test-external --feature load
+
+Full suite:
+
+  sudo docker compose -f docker-compose.test.yaml --profile external \
+    run --remove-orphans sipp-test-external
+
+Review failures as real failures unless the report explicitly says the external
+topology lacks a required endpoint or Docker evidence path.
+
+5G SA Suite (docker-compose.test5g.yaml)
+----------------------------------------
+
+The 5G SA + VoNR suite has the same internal/external split. Use the 5G compose
+file and the sipp-test-external-5g service, and set the 5G NF endpoint variables
+(AMF_IP, NRF_IP, AUSF_IP, UDM_IP, UDR_IP, PCF_IP, SMF_IP, UPF_IP, NSSF_IP, SCP_IP,
+BSF_IP, MONGO_IP) in addition to the shared IMS variables. In external mode
+LOCAL_IP is auto-derived from the route to AMF_IP when not set explicitly.
+
+  # 5G core smoke (no UERANSIM needed):
+  sudo docker compose -f docker-compose.test5g.yaml --profile external \
+    run --remove-orphans sipp-test-external-5g --bundle 5gc
+
+  # 5G load and capacity:
+  sudo docker compose -f docker-compose.test5g.yaml --profile external \
+    run --remove-orphans sipp-test-external-5g --feature load_5g
+
+UERANSIM note: the gNB/UE simulator (test/ueransim/) runs on the generator VM and
+connects to the remote AMF over N2 (AMF_IP:38412 / SCTP). Bring it up on the
+generator with the core's AMF_IP reachable before running registration/PDU tests.

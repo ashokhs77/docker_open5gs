@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Inter-NIB ViLTE INVITE — callee in external domain.
+  Offers audio + video SDP toward sip:+9990001234@external.example.
+  IMS must attempt inter-domain routing without returning 5xx.
+  A 4xx or timeout is acceptable; no real external NIB is present.
+  A 5xx indicates IMS rejected the video SDP or routing table error.
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+-->
+<scenario name="Inter-NIB ViLTE INVITE">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:+9990001234@external.example SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:+9990001234@external.example>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=- [call_number] [call_number] IN IP4 [local_ip]
+      s=ViLTE Inter-NIB Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 9331 RTP/AVP 96 0 8
+      b=AS:25
+      a=rtpmap:96 AMR/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:8 PCMA/8000
+      a=sendrecv
+      m=video 9333 RTP/AVP 100
+      b=AS:384
+      a=rtpmap:100 H264/90000
+      a=fmtp:100 profile-level-id=42C01F
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="180" optional="true" timeout="8000"/>
+  <recv response="183" optional="true" timeout="8000"/>
+  <recv response="200" optional="true" timeout="5000"/>
+  <recv response="400" optional="true" timeout="8000"/>
+  <recv response="401" optional="true" timeout="5000"/>
+  <recv response="403" optional="true" timeout="5000"/>
+  <recv response="404" optional="true" timeout="8000"/>
+  <recv response="408" optional="true" timeout="8000"/>
+  <recv response="480" optional="true" timeout="8000"/>
+  <recv response="484" optional="true" timeout="5000"/>
+  <!-- NOTE: No recv for 488 here — same reason as intra-NIB scenario.
+       Having an optional recv for 488 injects "488" into SIPp's stats
+       table header with count=0, which causes the \b488\b grep in the
+       test script to fire as a false positive (test FAILS even when no
+       real 488 was received). Without this element, "488" only appears
+       in SIPp output if it was actually received — a true positive. -->
+  <recv response="503" optional="true" timeout="8000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

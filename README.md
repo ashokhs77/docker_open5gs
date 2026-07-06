@@ -7,7 +7,7 @@ Quite contrary to the name of the repository, this repository contains docker fi
 - Osmocom MSC - https://github.com/osmocom/osmo-msc
 - srsRAN_4G (4G eNB + 4G UE + 5G UE) - https://github.com/srsran/srsRAN_4G
 - srsRAN_Project (5G gNB) - https://github.com/srsran/srsRAN_Project
-- UERANSIM (5G gNB + 5G UE) - https://github.com/aligungr/UERANSIM
+- UERANSIM (5G gNB + 5G UE, test-suite software RAN/UE only) - https://github.com/aligungr/UERANSIM
 - eUPF (5G UPF) - https://github.com/edgecomllc/eupf
 - OpenSIPS IMS - https://github.com/OpenSIPS/opensips
 - Sigscale OCS - https://github.com/sigscale/ocs
@@ -60,7 +60,7 @@ RF simulated setups:
 
 - srsRAN_4G (eNB + UE) simulation over ZMQ
 - srsRAN_Project (5G gNB) + srsRAN_4G (5G UE) simulation over ZMQ
-- UERANSIM (gNB + UE) simulator
+- UERANSIM (gNB + UE) simulator for the 5G test suite only
 
 ## Prepare Docker images
 
@@ -116,10 +116,9 @@ docker pull ghcr.io/herlesupreeth/docker_srsran:master
 docker tag ghcr.io/herlesupreeth/docker_srsran:master docker_srsran
 ```
 
-For UERANSIM components:
-```
-docker pull ghcr.io/herlesupreeth/docker_ueransim:master
-docker tag ghcr.io/herlesupreeth/docker_ueransim:master docker_ueransim
+For 5G test-suite UERANSIM only (not needed for normal 5G deployment):
+```bash
+sudo bash test/build_test_5g.sh --only-ueransim
 ```
 
 For EUPF component:
@@ -147,7 +146,7 @@ docker tag ghcr.io/herlesupreeth/docker_swu_client:master docker_swu_client
 ```
 
 ### Build Docker images from source
-#### Clone repository and build base docker image of open5gs, kamailio, srsRAN_4G, srsRAN_Project, ueransim
+#### Clone repository and build deployment images for open5gs, kamailio, srsRAN_4G, and srsRAN_Project
 
 ```
 # Build docker image for open5gs EPC/5GC components
@@ -167,9 +166,8 @@ docker build --no-cache --force-rm -t docker_srslte .
 cd ../srsran
 docker build --no-cache --force-rm -t docker_srsran .
 
-# Build docker image for UERANSIM (gNB + UE)
-cd ../ueransim
-docker build --no-cache --force-rm -t docker_ueransim .
+# UERANSIM is not part of the deployment build. For the 5G test suite, use:
+sudo bash test/build_test_5g.sh --only-ueransim
 
 # Build docker image for EUPF
 cd ../eupf
@@ -380,11 +378,9 @@ docker compose -f srsgnb_zmq.yaml up -d && docker container attach srsgnb_zmq
 # srsRAN ZMQ 5G UE (RF simulated)
 docker compose -f srsue_5g_zmq.yaml up -d && docker container attach srsue_5g_zmq
 
-# UERANSIM gNB (RF simulated)
-docker compose -f nr-gnb.yaml up -d && docker container attach nr_gnb
-
-# UERANSIM NR-UE (RF simulated)
-docker compose -f nr-ue.yaml up -d && docker container attach nr_ue
+# UERANSIM is not part of normal 5G deployment. For the 5G test suite only:
+sudo bash test/build_test_5g.sh --only-ueransim
+sudo bash test/ueransim/bringup_ueransim.sh
 ```
 
 ## Docker Compose files overview
@@ -404,8 +400,6 @@ This repository provides several Docker Compose files to support different deplo
 | `srsgnb.yaml`                      | Deploys srsRAN 5G gNB for OTA setups using SDR hardware.                                           |
 | `srsgnb_zmq.yaml`                  | Deploys srsRAN 5G gNB for RF simulated setups over ZMQ.                                            |
 | `srsue_5g_zmq.yaml`                | Deploys srsRAN 5G UE for RF simulated setups over ZMQ.                                             |
-| `nr-gnb.yaml`                      | Deploys UERANSIM 5G gNB simulator.                                                                 |
-| `nr-ue.yaml`                       | Deploys UERANSIM 5G UE simulator.                                                                  |
 | `4g-volte-ocs-deploy.yaml`         | Deploys 4G Core Network (EPC) + Sigscale OCS with IMS (VoLTE) using Kamailio.                      |
 | `4g-external-ims-deploy.yaml`      | Deploys 4G Core Network (EPC) + Sigscale OCS + PyHSS (IMS) with no IMS components.                 |
 | `4g-volte-vowifi-deploy.yaml`      | Deploys 4G Core Network (EPC) + Osmocom EPDG with IMS (VoLTE/VoWiFi) using Kamailio.               |
@@ -612,3 +606,4 @@ Password : admin
 
 ## Not supported
 - IPv6 usage in Docker
+

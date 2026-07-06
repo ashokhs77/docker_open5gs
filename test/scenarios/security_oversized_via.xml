@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-5: INVITE with oversized Via header (buffer overflow probe)
+  Sends an INVITE with a Via header containing ~512 bytes of padding in
+  a custom parameter. This probes whether the P-CSCF SIP parser handles
+  large header values gracefully (returns 400 Bad Request or 413 Request
+  Entity Too Large) rather than crashing or silently corrupting state.
+
+  Buffer overflow / stack smash probes via large header values are a
+  classic SIP security attack vector (see RFC 5039 §3.1).
+
+  Expected: 400 Bad Request or 413 Entity Too Large (parser rejects it)
+  Acceptable: any 4xx (stack normalises/truncates and rejects cleanly)
+  Fail: 5xx (crash or internal error) or P-CSCF port goes down
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_oversized_via.xml \
+         -i [LOCAL_IP] -p 9314 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: Oversized Via header probe">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:9876541000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch];overflow=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- P-CSCF must return 4xx (most likely 400 Bad Request) — not crash.
+       Non-zero SIPp exit on unexpected 4xx handled by test script.
+       Test script also verifies P-CSCF port is still open after the probe. -->
+  <recv response="400" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

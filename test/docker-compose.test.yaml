@@ -1,0 +1,86 @@
+x-sipp-test-common: &sipp-test-common
+  build: .
+  image: docker_test
+  privileged: true
+  cap_add:
+    - NET_ADMIN
+  env_file:
+    - ../.env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ./lib:/opt/test/lib:ro
+    - ./features:/opt/test/features:ro
+    - ./scenarios:/opt/test/scenarios:ro
+    - ./ue_sim:/opt/test/ue_sim:ro
+    - ./run_tests.sh:/opt/test/run_tests.sh:ro
+    - ./provision_subscribers.sh:/opt/test/provision_subscribers.sh:ro
+    - ./reports:/opt/test/reports
+
+x-sipp-test-env: &sipp-test-env
+  PCSCF_IP: ${PCSCF_IP:-172.22.1.21}
+  PCSCF_PORT: ${PCSCF_PORT:-5060}
+  FREESWITCH_IP: ${FREESWITCH_IP:-172.22.1.150}
+  PYHSS_IP: ${PYHSS_IP:-172.22.1.18}
+  PYHSS_REST_PORT: ${PYHSS_REST_PORT:-8080}
+  DNS_IP: ${DNS_IP:-172.22.1.15}
+  NIB: ${NIB:-1}
+  SMSC_IP: ${SMSC_IP:-172.22.1.33}
+  ICSCF_IP: ${ICSCF_IP:-172.22.1.19}
+  SCSCF_IP: ${SCSCF_IP:-172.22.1.20}
+  MYSQL_IP: ${MYSQL_IP:-172.22.1.17}
+  RTPENGINE_IP: ${RTPENGINE_IP:-host.docker.internal}
+  MME_IP: ${MME_IP:-172.22.1.9}
+  MME_PORT: ${MME_PORT:-36412}
+  MMSC_IP: ${MMSC_IP:-}
+  OSMOMSC_IP: ${OSMOMSC_IP:-172.22.1.31}
+  UPF_IP: ${UPF_IP:-172.22.1.8}
+  TEST_TOPOLOGY: ${TEST_TOPOLOGY:-internal}
+  CORE_TARGET_LABEL: ${CORE_TARGET_LABEL:-same-vm-docker}
+  CORE_VM_HOST: ${CORE_VM_HOST:-}
+  LOAD_GENERATOR_IP: ${LOAD_GENERATOR_IP:-}
+  DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+  INCLUDE_TEST_CONTAINER_STATS: ${INCLUDE_TEST_CONTAINER_STATS:-1}
+  SOFTPHONE_TARGET_URI: ${SOFTPHONE_TARGET_URI:-}
+  SOFTPHONE_TARGET_LABEL: ${SOFTPHONE_TARGET_LABEL:-}
+  SOFTPHONE_EXPECT_ANSWER: ${SOFTPHONE_EXPECT_ANSWER:-true}
+  SOFTPHONE_CALL_DURATION: ${SOFTPHONE_CALL_DURATION:-5}
+
+services:
+  sipp-test:
+    <<: *sipp-test-common
+    container_name: sipp-test
+    environment:
+      <<: *sipp-test-env
+      TEST_TOPOLOGY: ${TEST_TOPOLOGY:-internal}
+      LOCAL_IP: ${LOCAL_IP:-172.22.1.200}
+    networks:
+      default:
+        ipv4_address: 172.22.${NIB:-1}.200
+    dns:
+      - ${DNS_IP:-172.22.1.15}
+
+  # External generator mode runs the test runner on the generator VM host
+  # network. Use this when the Core/IMS stack runs on a different VM and
+  # its service endpoints are reachable from this VM.
+  #
+  # Example:
+  #   TEST_TOPOLOGY=external LOCAL_IP=<generator-ip> PCSCF_IP=<core-pcscf-ip> \
+  #     sudo docker compose -f docker-compose.test.yaml --profile external \
+  #     run --remove-orphans sipp-test-external --feature load
+  sipp-test-external:
+    <<: *sipp-test-common
+    container_name: sipp-test-external
+    profiles:
+      - external
+    network_mode: host
+    environment:
+      <<: *sipp-test-env
+      TEST_TOPOLOGY: external
+      LOCAL_IP: ${LOCAL_IP:-}
+
+networks:
+  default:
+    name: docker_open5gs_default
+    external: true

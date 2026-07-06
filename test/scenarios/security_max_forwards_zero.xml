@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-4: INVITE with Max-Forwards: 0 (RFC 3261 loop prevention)
+  RFC 3261 §8.1.1.6: a proxy receiving a request with Max-Forwards: 0
+  MUST NOT forward it and MUST respond with 483 Too Many Hops.
+
+  This validates that P-CSCF enforces hop-count limits correctly.
+  Attackers may send Max-Forwards: 0 to fingerprint RFC compliance, probe
+  for routing loops, or trigger edge-case handling bugs in the proxy.
+
+  Expected: 483 Too Many Hops
+  Acceptable: any other 4xx (if P-CSCF processes despite header value)
+  Fail: any 5xx (crash) or 2xx (forwarded with Max-Forwards: 0)
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_max_forwards_zero.xml \
+         -i [LOCAL_IP] -p 9313 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: Max-Forwards: 0 probe">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:9876541000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 0
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- RFC 3261 requires 483 Too Many Hops when Max-Forwards reaches 0.
+       If P-CSCF has WITH_SIPP_TEST and routes anyway, the forwarded
+       request would reach S-CSCF which also returns 483.
+       Non-zero SIPp exit on unexpected 4xx is handled by the test script. -->
+  <recv response="483" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

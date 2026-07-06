@@ -47,6 +47,12 @@
     <!-- <param name="user-agent-string" value="FreeSWITCH Rocks!"/> -->
 
     <param name="debug" value="0"/>
+    <!-- Sofia SIP worker threads for this profile.
+         Default is 1 (single-threaded SIP processing). At 32+ concurrent VoLTE calls
+         (e.g. conference/BGCF traffic) all SIP transactions serialize through one thread,
+         creating a backlog. 8 workers allow parallel transaction processing.
+         Rule: ~1 per CPU core; i7-13th-gen (10 cores) → 8 is safe headroom. -->
+    <param name="worker-threads" value="8"/>
     <!-- If you want FreeSWITCH to shutdown if this profile fails to load, uncomment the next line. -->
     <!-- <param name="shutdown-on-fail" value="true"/> -->
     <param name="sip-trace" value="no"/>
@@ -440,3 +446,4 @@
     <!--<param name="auto-invite-100" value="false"/>-->
   </settings>
 </profile>
+

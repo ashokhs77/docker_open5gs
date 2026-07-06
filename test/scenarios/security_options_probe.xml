@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-3: SIP OPTIONS topology enumeration probe
+  Sends an OPTIONS request to P-CSCF — a method commonly used by
+  attackers to enumerate SIP topology, discover capabilities, and
+  fingerprint SIP stacks.
+
+  P-CSCF must respond gracefully (typically 200 OK with capability list,
+  or 405 Method Not Allowed if OPTIONS is not served). A 5xx response or
+  no response indicates the P-CSCF crashes or hangs on OPTIONS probes.
+
+  Kamailio with WITH_PING_UDP/WITH_PING_TCP responds with 200 OK.
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_options_probe.xml \
+         -i [LOCAL_IP] -p 9312 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: SIP OPTIONS probe">
+
+  <send retrans="500">
+    <![CDATA[
+      OPTIONS sip:IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:probe@[local_ip]>;tag=[call_number]
+      To: <sip:IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 OPTIONS
+      Accept: application/sdp
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- P-CSCF must respond — 200 OK expected with WITH_PING_UDP enabled.
+       405 Method Not Allowed is also acceptable. Any non-5xx non-timeout
+       response indicates the stack handles OPTIONS probes gracefully.
+       Non-200 is caught by the test script's flexible pass logic. -->
+  <recv response="200" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

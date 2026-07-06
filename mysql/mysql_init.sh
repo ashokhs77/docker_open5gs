@@ -27,7 +27,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 sed -i "s/127.0.0.1/0.0.0.0/g" /etc/mysql/mysql.conf.d/mysqld.cnf
-sed -i "s/# max_connections        = 151/max_connections        = 250/g" /etc/mysql/mysql.conf.d/mysqld.cnf
+sed -i "s/# max_connections        = 151/max_connections        = 500/g" /etc/mysql/mysql.conf.d/mysqld.cnf
+cat > /etc/mysql/mysql.conf.d/99-open5gs-capacity.cnf <<EOF
+[mysqld]
+max_connections = 500
+thread_cache_size = 100
+table_open_cache = 2000
+innodb_buffer_pool_size = 512M
+innodb_flush_log_at_trx_commit = 2
+EOF
 cat > ~/.my.cnf <<EOF
 [mysql]
 user=root
@@ -58,3 +66,4 @@ fi
 pkill -9 mysqld
 sleep 5
 exec mysqld_safe $@
+

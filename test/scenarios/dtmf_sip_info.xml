@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  In-Call DTMF via SIP INFO (RFC 2976)
+  Establishes a call directly to FreeSWITCH, then sends two SIP INFO messages
+  carrying DTMF digits (1 and #), and verifies the remote returns 200 OK for each.
+
+  Uses the fs_direct_invite.xml pattern: [remote_ip]:[remote_port] in all
+  Request-URIs (not IMS_DOMAIN) to avoid any proxy-domain routing issues.
+  No Route/rrs headers — direct call with no proxy path.
+
+  Run with:
+    sipp FS_IP:5090 -sf dtmf_sip_info.xml -s 1010 -i LOCAL_IP -p 9302 -m 1
+-->
+<scenario name="DTMF SIP INFO">
+
+  <!-- Establish call -->
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,INFO,OPTIONS,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=DTMF SIP INFO Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 20002 RTP/AVP 8 0
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="200" rtd="true" timeout="10000"/>
+
+  <send>
+    <![CDATA[
+      ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <pause milliseconds="500"/>
+
+  <!-- SIP INFO: DTMF digit 1 -->
+  <send retrans="500">
+    <![CDATA[
+      INFO sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 INFO
+      Content-Type: application/dtmf-relay
+      Content-Length: [len]
+
+Signal=1
+Duration=160
+    ]]>
+  </send>
+
+  <recv response="200" timeout="5000"/>
+
+  <pause milliseconds="200"/>
+
+  <!-- SIP INFO: DTMF digit # -->
+  <send retrans="500">
+    <![CDATA[
+      INFO sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 3 INFO
+      Content-Type: application/dtmf-relay
+      Content-Length: [len]
+
+Signal=#
+Duration=160
+    ]]>
+  </send>
+
+  <recv response="200" timeout="5000"/>
+
+  <pause milliseconds="500"/>
+
+  <!-- BYE -->
+  <send retrans="500">
+    <![CDATA[
+      BYE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 4 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv response="200" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000, 2000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000"/>
+</scenario>

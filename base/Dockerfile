@@ -61,7 +61,8 @@ RUN apt-get update && \
         libnghttp2-dev \
         libtins-dev \
         libidn11-dev \
-        libtalloc-dev
+        libtalloc-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 #RUN mkdir -p /etc/apt/keyrings
 #RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
@@ -76,9 +77,13 @@ RUN chmod 777 /usr/lib64/libLwsLicenseCheck.so
 # Refresh library linker cache
 RUN ldconfig
 
-# Get open5gs code and install
-RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && \
-     git checkout  ca0a9b3b65f90c78f91a0dc48845eddef3af3a1b && \
+# Get open5gs code and install. Fetch only the pinned commit to keep build
+# cache and builder layers small.
+RUN git init open5gs && cd open5gs && \
+    git remote add origin https://github.com/ashokhs77/open5gs && \
+    git fetch --depth 1 origin 9215da385d640782bfd62b8c0281913689172722 && \
+    git checkout FETCH_HEAD && \
+    git submodule update --init --recursive --depth 1 && \
     if [ "$LICENSE" = "OFF" ]; then \
         echo "Disabling MME License"; \
         sed -i "s/, *'-DENABLE_LICENSE_CHECK'//g" src/mme/meson.build; \
@@ -87,7 +92,7 @@ RUN git clone --recursive https://github.com/ashokhs77/open5gs && cd open5gs && 
     fi && \
     meson build --prefix=`pwd`/install && \
     ninja -C build && cd build && ninja install && \
-    mkdir -p /open5gs/install/include
+    (find ../install/bin ../install/lib -type f -exec strip --strip-unneeded {} + 2>/dev/null || true)
 
 # Building WebUI of open5gs
 #RUN cd open5gs/webui && npm ci
@@ -99,34 +104,29 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-       # curl \
         ca-certificates \
-        libssl-dev \
-        libyaml-dev \
-        libmicrohttpd-dev \
-        libmongoc-dev \
-        libsctp-dev \
-        libcurl4-gnutls-dev \
-        libtins-dev \
-        libidn11-dev \
-        libtalloc-dev \
+        libssl3 \
+        libyaml-0-2 \
+        libmicrohttpd12 \
+        libmongoc-1.0-0 \
+        libbson-1.0-0 \
+        libsctp1 \
+        libcurl3-gnutls \
+        libtins4.0 \
+        libidn12 \
+        libtalloc2 \
         netbase \
         ifupdown \
-        net-tools \
+        iproute2 \
         iputils-ping \
-        python3-setuptools \
-        python3-wheel \
-        python3-pip \
+        python3 \
+        python3-click \
         iptables \
-        iperf \
-        iperf3 \
-        traceroute \
-        tcpdump \
-      #  mongodb-clients \
-        gnupg && \
-    apt-get autoremove -y && apt-get autoclean
-
-RUN pip3 install click
+	iperf \
+        iperf3 && \
+    apt-get autoremove -y && \
+    apt-get autoclean && \
+    rm -rf /var/lib/apt/lists/*
 
 #RUN mkdir -p /etc/apt/keyrings
 #RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
@@ -138,7 +138,6 @@ RUN update-ca-certificates
 
 COPY --from=builder /open5gs/install/bin /open5gs/install/bin
 COPY --from=builder /open5gs/install/etc /open5gs/install/etc
-COPY --from=builder /open5gs/install/include /open5gs/install/include
 COPY --from=builder /open5gs/install/lib /open5gs/install/lib
 #COPY --from=builder /open5gs/webui /open5gs/webui
 COPY --from=builder /open5gs/misc/db /open5gs/misc/db
@@ -155,3 +154,4 @@ WORKDIR /open5gs
 
 COPY open5gs_init.sh /
 CMD ["/open5gs_init.sh"]
+

@@ -373,6 +373,49 @@
       <param name="video-fps" value="20"/>
     </profile>
 
+    <!-- Lighter profile for LARGER video conferences (e.g. 8 UEs -> 3x3 grid).
+         vs the default video-mcu-stereo (1920x1080 / 1mb / 20fps), this uses a
+         720p landscape canvas at half the bitrate and 15fps, which roughly halves
+         the canvas H.264 re-encode load AND the per-stream packet rate that the
+         (userspace) rtpengine must relay - directly easing the "Too many packets
+         in UDP receive queue" drops under many video participants.
+         video-mode=mux + group:grid auto-scales tiles by participant count
+         (2x2 at 4, 3x3 at 8, 4x4 at 16...).
+         To use it: point the conference at this profile, e.g. dial
+         conference <room>@video-mcu-8party  (or set it as the conference's profile
+         in the dialplan / FreeSWITCH conference create). -->
+    <profile name="video-mcu-8party">
+      <param name="domain" value="$${domain}"/>
+      <param name="rate" value="48000"/>
+      <param name="channels" value="2"/>
+      <param name="interval" value="20"/>
+      <param name="energy-level" value="200"/>
+      <param name="muted-sound" value="conference/conf-muted.wav"/>
+      <param name="unmuted-sound" value="conference/conf-unmuted.wav"/>
+      <param name="alone-sound" value="conference/conf-alone.wav"/>
+      <param name="moh-sound" value="$${hold_music}"/>
+      <param name="enter-sound" value="tone_stream://%(200,0,500,600,700)"/>
+      <param name="exit-sound" value="tone_stream://%(500,0,300,200,100,50,25)"/>
+      <param name="kicked-sound" value="conference/conf-kicked.wav"/>
+      <param name="locked-sound" value="conference/conf-locked.wav"/>
+      <param name="is-locked-sound" value="conference/conf-is-locked.wav"/>
+      <param name="is-unlocked-sound" value="conference/conf-is-unlocked.wav"/>
+      <param name="pin-sound" value="conference/conf-pin.wav"/>
+      <param name="bad-pin-sound" value="conference/conf-bad-pin.wav"/>
+      <param name="caller-id-name" value="$${outbound_caller_name}"/>
+      <param name="caller-id-number" value="$${outbound_caller_id}"/>
+      <param name="comfort-noise" value="false"/>
+      <param name="conference-flags" value="livearray-json-status|json-events|video-floor-only|rfc-4579|livearray-sync|minimize-video-encoding|manage-inbound-video-bitrate|video-required-for-canvas|video-mute-exit-canvas|mute-detect"/>
+      <param name="video-auto-floor-msec" value="1000"/>
+      <param name="video-mode" value="mux"/>
+      <param name="video-layout-name" value="group:grid"/>
+      <param name="video-canvas-size" value="1280x720"/>
+      <param name="video-canvas-bgcolor" value="#333333"/>
+      <param name="video-layout-bgcolor" value="#000000"/>
+      <param name="video-codec-bandwidth" value="512kb"/>
+      <param name="video-fps" value="15"/>
+    </profile>
+
   <!--<profile name="sla">
       <param name="domain" value="$${domain}"/>
       <param name="rate" value="16000"/>
@@ -385,3 +428,5 @@
 
   </profiles>
 </configuration>
+
+

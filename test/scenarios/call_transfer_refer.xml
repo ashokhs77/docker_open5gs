@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Call Transfer via REFER (RFC 3515)
+  Establishes a direct call to FreeSWITCH, sends REFER to transfer to a third
+  party, waits for 202 Accepted, then hangs up.
+
+  Uses the fs_direct_invite.xml pattern: [remote_ip]:[remote_port] in all
+  Request-URIs (not IMS_DOMAIN) to avoid any proxy-domain routing issues.
+  No Route/rrs headers — direct call with no proxy path.
+
+  NOTE: XML structural rule — optional recv elements may NOT appear between
+  the final mandatory recv and the next send/pause without an intervening
+  mandatory recv (SIPp: "optional recv before pause without mandatory message").
+  All optional recv absorbs are placed only where a mandatory recv follows.
+
+  Run with:
+    sipp FS_IP:5090 -sf call_transfer_refer.xml -s 1010 -i LOCAL_IP -p 9303 -m 1
+-->
+<scenario name="Call Transfer REFER">
+
+  <!-- Establish initial call -->
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,REFER,NOTIFY,OPTIONS,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=Call Transfer Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 20003 RTP/AVP 8 0
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="200" rtd="true" timeout="10000"/>
+
+  <send>
+    <![CDATA[
+      ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <pause milliseconds="500"/>
+
+  <!-- REFER to transfer target -->
+  <send retrans="500">
+    <![CDATA[
+      REFER sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 REFER
+      Refer-To: <sip:9876540002@[remote_ip]>
+      Referred-By: <sip:9876540001@[local_ip]>
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- 202 Accepted for the REFER — this is the core assertion.
+       NOTE: no optional recv→pause sequence here to avoid SIPp structural error. -->
+  <recv response="202" timeout="10000"/>
+
+  <pause milliseconds="500"/>
+
+  <!-- Hang up the original call -->
+  <send retrans="500">
+    <![CDATA[
+      BYE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 3 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Absorb 200 OK for BYE — optional so scenario ends cleanly on timeout too -->
+  <recv response="200" optional="true" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000, 2000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000"/>
+</scenario>

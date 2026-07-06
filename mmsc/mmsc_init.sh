@@ -1,11 +1,26 @@
 #!/bin/bash
 
-cp /usr/local/kannel/etc/kannel.conf /tmp/kannel.conf
+# Select kannel config based on DEPLOY_MODE:
+#   DEPLOY_MODE=5G  → kannel_5g.conf  (HTTP smsc → SMSC xhttp, no OsmoMSC)
+#   anything else   → kannel.conf     (SMPP smsc → OsmoMSC, classic 4G path)
+if [ "${DEPLOY_MODE:-}" = "5G" ]; then
+    echo "DEPLOY_MODE=5G: using kannel_5g.conf (HTTP smsc -> SMSC xhttp)"
+    cp /usr/local/kannel/etc/kannel_5g.conf /tmp/kannel.conf
+else
+    echo "DEPLOY_MODE=4G (default): using kannel.conf (SMPP smsc -> OsmoMSC)"
+    cp /usr/local/kannel/etc/kannel.conf /tmp/kannel.conf
+fi
 cp /usr/local/mbuni/etc/mbuni.conf /tmp/mbuni.conf
 
 # Substitute MMSC_IP first (needed before proxy group generation)
 sed -i "s|MMSC_IP|${MMSC_IP}|g" /tmp/kannel.conf
-sed -i "s|OSMOMSC_IP|${OSMOMSC_IP}|g" /tmp/kannel.conf
+# In 5G mode SMSC_IP replaces the SMSC_IP placeholder in kannel_5g.conf.
+# In 4G mode OSMOMSC_IP replaces the OsmoMSC host placeholder in kannel.conf.
+if [ "${DEPLOY_MODE:-}" = "5G" ]; then
+    sed -i "s|SMSC_IP|${SMSC_IP}|g" /tmp/kannel.conf
+else
+    sed -i "s|OSMOMSC_IP|${OSMOMSC_IP}|g" /tmp/kannel.conf
+fi
 sed -i "s|MMSC_IP|${MMSC_IP}|g" /tmp/mbuni.conf
 
 echo "Local MMSC IP: ${MMSC_IP}"
@@ -88,6 +103,20 @@ echo "Starting Kannel smsbox..."
 /usr/local/kannel/sbin/smsbox /tmp/kannel.conf &
 sleep 3
 
+# Start Mbuni MMSBox VAS gateway for SendMMS/MM7 application ingress.
+# The mmsc daemon handles subscriber-facing MM1/MM7; mmsbox owns sendmms-port.
+echo "Starting Mbuni MMSBox VAS gateway..."
+/usr/local/mbuni/bin/mmsbox /tmp/mbuni.conf &
+MMSBOX_PID=$!
+sleep 3
+
+if ! kill -0 $MMSBOX_PID 2>/dev/null; then
+    echo "ERROR: mmsbox failed to start"
+    cat /tmp/mbuni.log
+    exit 1
+fi
+
 # Start Mbuni MMSC
 echo "Starting Mbuni MMSC..."
 exec /usr/local/mbuni/bin/mmsc /tmp/mbuni.conf
+

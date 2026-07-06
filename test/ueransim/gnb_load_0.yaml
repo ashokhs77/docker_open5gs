@@ -1,0 +1,19 @@
+# Dedicated 5G LOAD gNB #0 (capacity/stress tests only). Separate cell from the
+# functional nr-gnb so load churn never disturbs the functional UE/registration
+# evidence. Same AMF (N2), distinct NCI + IP. Launched/torn down by
+# lib/ueransim_load_5g.sh as container nr-gnb-load-0 at 172.22.1.211.
+mcc: "001"
+mnc: "01"
+nci: "0x000000020"
+idLength: 32
+tac: 1
+linkIp: 172.22.1.211
+ngapIp: 172.22.1.211
+gtpIp: 172.22.1.211
+amfConfigs:
+  - address: 172.22.1.10
+    port: 38412
+slices:
+  - sst: 1
+    sd: 0x000001
+ignoreStreamIds: true

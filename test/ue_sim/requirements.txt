@@ -1,0 +1,18 @@
+# UE/eNB Simulator Dependencies
+#
+# Core (required):
+cryptography>=41.0       # AES-128 for Milenage algorithm
+
+# SCTP support (for S1AP to MME):
+# pysctp>=0.7            # Python SCTP bindings (requires libsctp-dev)
+                          # Falls back to raw SCTP socket or TCP shim if unavailable
+
+# ASN.1 support (for S1AP encoding):
+# pycrate>=0.6           # ASN.1 PER codec with S1AP definitions
+                          # Falls back to template-based encoding if unavailable
+
+# Standard library only (no extra deps needed):
+# - socket (SCTP/UDP/TCP)
+# - hashlib (MD5 for SIP digest auth)
+# - hmac (HMAC-SHA256 for NAS key derivation)
+# - struct, uuid, base64, re, logging, threading, concurrent.futures

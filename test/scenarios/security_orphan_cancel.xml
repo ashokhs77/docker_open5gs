@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-7: Orphan CANCEL — CANCEL with no matching INVITE transaction
+  Sends a CANCEL request with a Call-ID that has no matching active INVITE
+  transaction in the IMS stack. RFC 3261 §9.2: a UAS receiving a CANCEL
+  for which no matching INVITE transaction exists MUST respond with
+  481 Call/Transaction Does Not Exist.
+
+  This validates the P-CSCF transaction state machine handles stray CANCEL
+  correctly without crashing. Attackers use orphan CANCEL to:
+    - Cancel legitimate calls in progress (call disruption)
+    - Probe transaction table edge cases for crash or state corruption
+
+  Expected: 481 Call/Transaction Does Not Exist
+  Acceptable: 400 Bad Request (strict parser), 200 OK is NOT acceptable
+  Fail: 5xx (crash) or 200 OK with call teardown
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_orphan_cancel.xml \
+         -i [LOCAL_IP] -p 9316 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: Orphan CANCEL (no matching transaction)">
+
+  <send retrans="500">
+    <![CDATA[
+      CANCEL sip:9876541000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: orphan-cancel-[call_id]
+      CSeq: 1 CANCEL
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- RFC 3261 requires 481 Call/Transaction Does Not Exist.
+       400 Bad Request is also acceptable for strict parsers.
+       Non-zero SIPp exit on unexpected 4xx handled by test script. -->
+  <recv response="481" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

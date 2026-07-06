@@ -1,0 +1,50 @@
+# 5G LOAD UE template for cell #1 (camps on load gNB nr-gnb-load-1 @ 172.22.1.212).
+# IMSI overridden per shard via `nr-ue -i <imsi> -n <count>`. See ue_load_0.yaml.
+supi: "imsi-001010000000357"
+mcc: "001"
+mnc: "01"
+protectionScheme: 0
+homeNetworkPublicKey: ""
+homeNetworkPublicKeyId: 0
+routingIndicator: "0000"
+key: "465B5CE8B199B49FAA5F0A2EE238A6BC"
+op: "E8ED289DEBA952E4283B54E88E6183CA"
+opType: "OPC"
+amf: "8000"
+imei: "356938035643803"
+imeiSv: "4370816125816151"
+gnbSearchList:
+  - 172.22.1.212
+uacAic:
+  mps: false
+  mcs: false
+uacAcc:
+  normalClass: 0
+  class11: false
+  class12: false
+  class13: false
+  class14: false
+  class15: false
+sessions:
+  - type: "IPv4"
+    apn: "internet"
+    slice:
+      sst: 1
+      sd: 0x000001
+configured-nssai:
+  - sst: 1
+    sd: 0x000001
+default-nssai:
+  - sst: 1
+    sd: 0x000001
+integrity:
+  IA1: true
+  IA2: true
+  IA3: true
+ciphering:
+  EA1: true
+  EA2: true
+  EA3: true
+integrityMaxRate:
+  uplink: "full"
+  downlink: "full"

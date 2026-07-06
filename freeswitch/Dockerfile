@@ -1,89 +1,154 @@
 FROM ubuntu:jammy AS builder
 
-
 ENV DEBIAN_FRONTEND=noninteractive
+ARG FREESWITCH_COMMIT=dd23170bb1608f9840d3e006f68c57bee0812c3e
 
-# Step 1: Install dependencies
-RUN apt-get update && apt-get install -y \
-  git cmake vim net-tools build-essential pkg-config uuid-dev zlib1g-dev libjpeg-dev libsqlite3-dev libcurl4-openssl-dev libpcre3-dev libspeexdsp-dev libldns-dev libedit-dev libtiff5-dev yasm libopus-dev libsndfile1-dev unzip libavformat-dev libswscale-dev liblua5.2-dev liblua5.2-0 cmake libpq-dev unixodbc-dev autoconf automake ntpdate libxml2-dev libpq-dev libpq5  libpcre2-dev pkg-config sngrep wget
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    autoconf \
+    automake \
+    build-essential \
+    ca-certificates \
+    cmake \
+    git \
+    libavformat-dev \
+    libcurl4-openssl-dev \
+    libedit-dev \
+    libjpeg-dev \
+    libldns-dev \
+    liblua5.2-0 \
+    liblua5.2-dev \
+    libopencore-amrnb-dev \
+    libopencore-amrwb-dev \
+    libopus-dev \
+    libpcre2-dev \
+    libpcre3-dev \
+    libpq-dev \
+    libsndfile1-dev \
+    libspeexdsp-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    libswscale-dev \
+    libtiff5-dev \
+    libtool \
+    libtool-bin \
+    libvo-amrwbenc-dev \
+    libxml2-dev \
+    pkg-config \
+    unixodbc-dev \
+    unzip \
+    uuid-dev \
+    wget \
+    yasm \
+    zlib1g-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN apt-get install -y libopencore-amrwb-dev  libopencore-amrwb0 libvo-amrwbenc-dev libvo-amrwbenc0
- 
-RUN apt-get install libopencore-amrnb-dev libopencore-amrnb0
+# libks/signalwire-c CMake derives package metadata from reachable Git tags.
+# Keep commit/tag history in the builder only; /usr/local/src is removed below.
+RUN git clone --filter=blob:none https://github.com/signalwire/libks.git /usr/local/src/libks && \
+    cd /usr/local/src/libks && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local . && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
 
-# Step 2: Build libks
-RUN git clone https://github.com/signalwire/libks.git /usr/local/src/libks && \
-  cd /usr/local/src/libks && \
-  cmake . && \
-  make && \
-  make install && \
-  ldconfig
+RUN git clone --filter=blob:none https://github.com/signalwire/signalwire-c.git /usr/local/src/signalwire-c && \
+    cd /usr/local/src/signalwire-c && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local . && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
 
-# Step 3: Build signalwire-c
-RUN git clone https://github.com/signalwire/signalwire-c.git /usr/local/src/signalwire-c && \
-  cd /usr/local/src/signalwire-c && \
-  cmake . && \
-  make && \
-  make install && \
-  ldconfig
+RUN git clone --depth 1 https://github.com/freeswitch/sofia-sip.git /usr/local/src/sofia-sip && \
+    cd /usr/local/src/sofia-sip && \
+    ./bootstrap.sh && \
+    ./configure && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
 
-# Step 4: Build sofia-sip
-RUN git clone https://github.com/freeswitch/sofia-sip.git /usr/local/src/sofia-sip && \
-  cd /usr/local/src/sofia-sip && \
-  ./bootstrap.sh && \
-  ./configure && \
-  make && \
-  make install && \
-  ldconfig
+RUN git clone --depth 1 https://github.com/freeswitch/spandsp.git /usr/local/src/spandsp && \
+    cd /usr/local/src/spandsp && \
+    ./bootstrap.sh && \
+    ./configure && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
 
-# Step 5: Build spandsp
-RUN git clone https://github.com/freeswitch/spandsp.git /usr/local/src/spandsp && \
-  cd /usr/local/src/spandsp && \
-  ./bootstrap.sh && \
-  ./configure && \
-  make && \
-  make install && \
-  ldconfig
-
-# Step 6: Build FreeSWITCH from source
-#RUN git clone https://github.com/Shreyas-B-Aradhya/freeswitch /usr/local/src/freeswitch
-RUN git clone https://github.com/Shreyas-B-Aradhya/freeswitch /usr/local/src/freeswitch && \
-      cd /usr/local/src/freeswitch  && git checkout dd23170bb1608f9840d3e006f68c57bee0812c3e
-    # cd /usr/local/src/freeswitch  && git checkout b168a6bee9c9fd49aec32feeaad6d3508550bf4f
-    # cd /usr/local/src/freeswitch  && git checkout 8aaa38d90ceb2f040916f17226df570bc3c5557e
-    # cd /usr/local/src/freeswitch  && git checkout ee54173e54fd7181def97ed54931d1da80a9b5dd
-
-
+RUN git init /usr/local/src/freeswitch && \
+    cd /usr/local/src/freeswitch && \
+    git remote add origin https://github.com/Shreyas-B-Aradhya/freeswitch && \
+    git fetch --depth 1 origin "$FREESWITCH_COMMIT" && \
+    git checkout FETCH_HEAD
 
 WORKDIR /usr/local/src/freeswitch
 
-# Copy over AMR files
-RUN cp /usr/include/opencore-amrnb/interf_enc.h /usr/local/src/freeswitch/src/mod/codecs/mod_amr/ && \
-  cp /usr/include/opencore-amrnb/interf_dec.h /usr/local/src/freeswitch/src/mod/codecs/mod_amr/ && \
-  cp /usr/include/opencore-amrwb/dec_if.h /usr/local/src/freeswitch/src/mod/codecs/mod_amrwb/ && \
-  cp /usr/include/vo-amrwbenc/enc_if.h /usr/local/src/freeswitch/src/mod/codecs/mod_amrwb/
+RUN cp /usr/include/opencore-amrnb/interf_enc.h src/mod/codecs/mod_amr/ && \
+    cp /usr/include/opencore-amrnb/interf_dec.h src/mod/codecs/mod_amr/ && \
+    cp /usr/include/opencore-amrwb/dec_if.h src/mod/codecs/mod_amrwb/ && \
+    cp /usr/include/vo-amrwbenc/enc_if.h src/mod/codecs/mod_amrwb/
 
-RUN cd /usr/local/src/freeswitch && ./bootstrap.sh
+# Install prompts/MOH at build time; runtime containers run without internet.
+RUN ./bootstrap.sh && \
+    sed -i 's/#\(codecs\/mod_amrwb\)/\1/g' modules.conf && \
+    ./configure && \
+    make -j"$(nproc)" && \
+    make install sounds-install moh-install && \
+    ldconfig
 
-# Add AMR WB to modules list
-RUN sed -i 's/#\(codecs\/mod_amrwb\)/\1/g' modules.conf
+RUN rm -rf \
+    /usr/local/src \
+    /usr/local/include \
+    /usr/local/lib/cmake \
+    /usr/local/lib/pkgconfig \
+    /usr/local/share/man && \
+    find /usr/local -type f \( -name '*.a' -o -name '*.la' \) -delete && \
+    (find /usr/local -type f \( -path '*/bin/*' -o -path '*/lib/*' -o -path '*/mod/*.so' \) -exec strip --strip-unneeded {} + 2>/dev/null || true) && \
+    find /usr/local/freeswitch -type f -name '*.o' -delete
 
-RUN ./configure && \
-  make && \
-  make all install cd-sounds-install cd-moh-install && \
-  ldconfig
+FROM ubuntu:jammy
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+# Runtime image intentionally excludes git, wget, compilers, headers, and sources.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libavformat58 \
+    libcurl4 \
+    libedit2 \
+    libjpeg-turbo8 \
+    libldns3 \
+    liblua5.2-0 \
+    libopencore-amrnb0 \
+    libopencore-amrwb0 \
+    libopus0 \
+    libpcre2-8-0 \
+    libpcre3 \
+    libpq5 \
+    libsndfile1 \
+    libspeexdsp1 \
+    libsqlite3-0 \
+    libswscale5 \
+    libtiff5 \
+    libuuid1 \
+    libvo-amrwbenc0 \
+    libxml2 \
+    unixodbc \
+    zlib1g && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local /usr/local
+COPY freeswitch_init.sh /freeswitch_init.sh
+
+RUN ldconfig && chmod +x /freeswitch_init.sh
 
 EXPOSE 8021/tcp
 EXPOSE 5090/tcp 5090/udp 5092/tcp 5092/udp
-#EXPOSE 5061/tcp 5061/udp 5081/tcp 5081/udp
 EXPOSE 5066/tcp
 EXPOSE 7443/tcp
 EXPOSE 8081/tcp 8082/tcp
 EXPOSE 64535-65535/udp
 EXPOSE 16384-32768/udp
 
-COPY freeswitch_init.sh /freeswitch_init.sh
-RUN chmod +x /freeswitch_init.sh
 CMD ["/freeswitch_init.sh"]
-
 

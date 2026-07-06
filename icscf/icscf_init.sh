@@ -32,6 +32,7 @@ mkdir -p /etc/kamailio_icscf
 cp /mnt/icscf/icscf.cfg /etc/kamailio_icscf
 cp /mnt/icscf/icscf.xml /etc/kamailio_icscf
 cp /mnt/icscf/kamailio_icscf.cfg /etc/kamailio_icscf
+cp /mnt/icscf/dispatcher.list /etc/kamailio_icscf
 
 while ! mysqladmin ping -h ${MYSQL_IP} --silent; do
 	sleep 5;
@@ -96,7 +97,20 @@ sed -i 's|ICSCF_BIND_PORT|'$ICSCF_BIND_PORT'|g' /etc/kamailio_icscf/icscf.xml
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_icscf/icscf.xml
 
 rm -f /kamailio_icscf.pid
-exec kamailio -f /etc/kamailio_icscf/kamailio_icscf.cfg -P /kamailio_icscf.pid -DD -E -e $@
+
+# IMS log capture — writes to ./log/icscf.log on the host via named pipe + tee.
+# Set IMS_LOG_ENABLED=false in .env (or docker-compose environment) to disable.
+IMS_LOG_DIR="/open5gs/install/var/log/open5gs"
+if [ "${IMS_LOG_ENABLED:-true}" = "true" ]; then
+    mkdir -p "$IMS_LOG_DIR"
+    _PIPE="/tmp/kamailio_icscf_$$.pipe"
+    mkfifo "$_PIPE"
+    # tee duplicates output: stdout (Docker log) + log file
+    tee -a "${IMS_LOG_DIR}/icscf.log" < "$_PIPE" &
+    exec kamailio -f /etc/kamailio_icscf/kamailio_icscf.cfg -P /kamailio_icscf.pid -DD -E -e "$@" > "$_PIPE" 2>&1
+fi
+exec kamailio -f /etc/kamailio_icscf/kamailio_icscf.cfg -P /kamailio_icscf.pid -DD -E -e "$@"
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  UE-A Hold SDP Test (UAC):
+  Sends INVITE with a=sendonly SDP (Samsung-style hold indicator)
+  through the P-CSCF to conf-factory. This validates:
+    1. P-CSCF's SDP media analysis handles sendonly without errors
+    2. FreeSWITCH accepts conference member with sendonly (listen-only)
+    3. Full routing chain works with hold-state SDP
+
+  Note: Actual hold detection (MO_indialog re-INVITE tracking) requires
+  IMS registration which SIPp can't do. This test validates the SDP
+  processing path that feeds into hold detection.
+
+  The IMS_DOMAIN placeholder is replaced at runtime via sed.
+-->
+<scenario name="UE-A Hold SDP via P-CSCF">
+
+  <!-- Send INVITE with sendonly SDP (simulates held party joining conference) -->
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:mmtel@conf-factory.IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:mmtel@conf-factory.IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540700@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,UPDATE,REFER,NOTIFY
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=Hold SDP Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 20000 RTP/AVP 96 8 0
+      a=rtpmap:96 AMR-WB/16000
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=sendonly
+    ]]>
+  </send>
+
+  <!-- Expect 100 Trying (optional) -->
+  <recv response="100" optional="true" timeout="5000"/>
+
+  <!-- Expect 200 OK from FreeSWITCH (via P-CSCF) -->
+  <recv response="200" rtd="true" timeout="10000" rrs="true" />
+
+  <!-- Send ACK with Record-Route path -->
+  <send>
+    <![CDATA[
+      ACK [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:mmtel@conf-factory.IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Brief pause in conference -->
+  <pause milliseconds="2000"/>
+
+  <!-- Send BYE with Record-Route path -->
+  <send retrans="500">
+    <![CDATA[
+      BYE [next_url] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      Route: [routes]
+      From: <sip:9876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:mmtel@conf-factory.IMS_DOMAIN>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Expect 200 OK to BYE -->
+  <recv response="200" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 30, 40, 50, 100, 150, 200"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000, 5000, 10000"/>
+</scenario>

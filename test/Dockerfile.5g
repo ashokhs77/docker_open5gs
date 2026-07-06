@@ -1,0 +1,56 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_NO_CACHE_DIR=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Install tools needed for 5G test suite:
+#   - sip-tester (SIPp) for IMS/VoNR call tests
+#   - curl/jq for SBI HTTP API probes (NRF, UDM, AUSF, PCF)
+#   - dnsutils for IMS DNS checks
+#   - netcat-openbsd for port checks (TCP + SCTP awareness)
+#   - iperf3 for UPF data-plane throughput
+#   - tcpdump for opt-in interface evidence pcaps (TRL8)
+#   - Docker CLI for MongoDB subscriber DB checks via docker exec
+#   - mysql-client for IMS MySQL checks
+#   - libsctp1/lksctp-tools for SCTP probe support
+#   - python3 + pysctp/cryptography for optional UE sim libraries
+# NOTE: No MongoDB client is installed here. Scripts use docker exec into the
+# MongoDB container and common_5g.sh auto-detects mongo:4.4 (mongo) vs
+# mongo:6.0 (mongosh). The test container only needs Docker CLI.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sip-tester \
+    curl \
+    jq \
+    dnsutils \
+    netcat-openbsd \
+    iproute2 \
+    iperf3 \
+    tcpdump \
+    bash \
+    docker.io \
+    mysql-client \
+    libsctp1 \
+    lksctp-tools \
+    util-linux \
+    python3 \
+    python3-pip \
+    && pip3 install --no-cache-dir pysctp cryptography pycrate \
+    && apt-get purge -y --auto-remove python3-pip \
+    && rm -rf /var/lib/apt/lists/* /root/.cache /tmp/*
+
+# Copy 5G test framework
+COPY lib/        /opt/test/lib/
+COPY features/   /opt/test/features/
+COPY scenarios/  /opt/test/scenarios/
+COPY run_tests_5g.sh /opt/test/
+
+# Normalise line endings and make scripts executable
+RUN find /opt/test -type f -name "*.sh" -exec sed -i 's/\r$//' {} + \
+    && chmod +x /opt/test/run_tests_5g.sh \
+    && find /opt/test/lib -name "*.sh" -exec chmod +x {} + \
+    && find /opt/test/features -name "*.sh" -exec chmod +x {} +
+
+WORKDIR /opt/test
+
+ENTRYPOINT ["/opt/test/run_tests_5g.sh"]

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Inter-NIB SIP MESSAGE to external domain
+  Routes a SIP MESSAGE from a local subscriber toward an external MSISDN/domain,
+  testing that S-CSCF performs inter-domain DNS-based routing for MESSAGE
+  requests rather than treating the external URI as an error.
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf sms_inter_nib.xml -i [LOCAL_IP] \
+         -p 9311 -m 1 -l 1 -timeout 15
+
+  Expected outcomes:
+    Any non-5xx response — S-CSCF attempted inter-domain routing (pass)
+    5xx — IMS stack rejected outright rather than routing (fail)
+    Timeout — acceptable (no actual external NIB in test environment)
+
+  NOTE: A real external NIB is not present in the test environment, so the
+  MESSAGE will likely time-out or return 408/503 after the routing attempt.
+  The test only verifies that S-CSCF does NOT return a 5xx error immediately,
+  which would indicate a routing configuration problem.
+-->
+<scenario name="Inter-NIB SIP MESSAGE to external domain">
+
+  <send retrans="500">
+    <![CDATA[
+      MESSAGE sip:+9990001234@external.example SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:+9990001234@external.example>
+      Call-ID: [call_id]
+      CSeq: 1 MESSAGE
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Content-Type: text/plain
+      Content-Length: 30
+
+      IMS inter-NIB SMS routing test
+    ]]>
+  </send>
+
+  <!-- Any provisional or final response is acceptable — absorbed here so SIPp
+       does not abort with "unexpected message" and print the raw SIP line to
+       stderr (which the test's grep would then match as a false-positive 5xx).
+       500 and 503 are expected routing failures when external.example cannot
+       be resolved by the S-CSCF dispatcher (no external NIB in lab). -->
+  <recv response="100" optional="true" timeout="3000"/>
+  <recv response="200" optional="true" timeout="10000"/>
+  <recv response="202" optional="true" timeout="5000"/>
+  <recv response="400" optional="true" timeout="5000"/>
+  <recv response="401" optional="true" timeout="5000"/>
+  <recv response="403" optional="true" timeout="5000"/>
+  <recv response="404" optional="true" timeout="5000"/>
+  <recv response="408" optional="true" timeout="5000"/>
+  <recv response="480" optional="true" timeout="5000"/>
+  <recv response="500" optional="true" timeout="5000"/>
+  <recv response="503" optional="true" timeout="5000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

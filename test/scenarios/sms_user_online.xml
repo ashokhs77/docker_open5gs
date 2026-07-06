@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!DOCTYPE scenario SYSTEM "sipp.dtd">
+<!--
+  Mimics the S-CSCF store-and-forward online trigger: a SIP MESSAGE to the SMSC
+  with body "USER_ONLINE:<msisdn>". The SMSC's SMS_FROM_SIP route detects this,
+  clears the recipient's backoff and removes it from pending_ue so the next
+  SMS_WORKER pass re-subscribes/delivers immediately. The recipient MSISDN is the
+  SIPp service argument ([service], i.e. -s <msisdn>).
+-->
+<scenario name="SMSC USER_ONLINE trigger">
+  <send retrans="500">
+    <![CDATA[
+      MESSAGE sip:smsc@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:scscf@[local_ip]>;tag=[call_number]
+      To: <sip:smsc@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 MESSAGE
+      Content-Type: text/plain
+      Content-Length: [len]
+
+      USER_ONLINE:[service]]]>
+  </send>
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="200" timeout="10000"/>
+</scenario>

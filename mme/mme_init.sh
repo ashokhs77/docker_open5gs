@@ -51,11 +51,21 @@ sed -i 's|EPC_DOMAIN|'$IMS_DOMAIN'|g' install/etc/freeDiameter/mme.conf
 sed -i 's|LD_LIBRARY_PATH|'$LD_LIBRARY_PATH'|g' install/etc/freeDiameter/mme.conf
 sed -i 's|EPC_DOMAIN|'$IMS_DOMAIN'|g' install/etc/freeDiameter/make_certs.sh
 
-# Generate TLS certificates
-./install/etc/freeDiameter/make_certs.sh install/etc/freeDiameter
+# Generate TLS certificates quietly; keep full OpenSSL details in the service log.
+CERT_LOG_DIR="/open5gs/install/var/log/open5gs"
+CERT_LOG="${CERT_LOG_DIR}/mme-certs.log"
+mkdir -p "$CERT_LOG_DIR"
+if ./install/etc/freeDiameter/make_certs.sh install/etc/freeDiameter >"$CERT_LOG" 2>&1; then
+    echo "MME TLS certificates generated (details: ${CERT_LOG})"
+else
+    echo "MME TLS certificate generation failed; details follow:"
+    cat "$CERT_LOG"
+    exit 1
+fi
 
 cd install/bin
 exec ./open5gs-mmed $@
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+

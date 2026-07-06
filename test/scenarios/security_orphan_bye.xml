@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Security TC-6: Orphan BYE — BYE with no active dialog
+  Sends a BYE request with a Call-ID that has no associated active dialog
+  in the IMS stack. RFC 3261 §15.1.2: a UAS receiving a BYE outside an
+  established dialog MUST respond with 481 Call/Transaction Does Not Exist.
+
+  This validates that the P-CSCF state machine handles out-of-dialog BYE
+  correctly without crashing. Attackers use orphan BYE to:
+    - Tear down legitimate calls (call hijacking)
+    - Probe SIP state machine edge cases for crash vectors
+
+  Expected: 481 Call/Transaction Does Not Exist
+  Acceptable: 400 Bad Request (strict parser rejects malformed BYE)
+  Fail: 5xx (crash) or 200 OK (illegitimate teardown accepted)
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf security_orphan_bye.xml \
+         -i [LOCAL_IP] -p 9315 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Security: Orphan BYE (no active dialog)">
+
+  <send retrans="500">
+    <![CDATA[
+      BYE sip:9876541000@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>;tag=orphan-remote-tag
+      Call-ID: orphan-bye-[call_id]
+      CSeq: 99 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- RFC 3261 requires 481 Call/Transaction Does Not Exist.
+       400 Bad Request is also acceptable for strict parsers.
+       Non-zero SIPp exit on unexpected 4xx handled by test script. -->
+  <recv response="481" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

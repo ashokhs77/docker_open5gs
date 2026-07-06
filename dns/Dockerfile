@@ -30,7 +30,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Install updates and dependencies
 RUN apt-get update && \
-	apt-get -y install tcpdump ntp ntpdate iproute2 net-tools \
-					iputils-ping bind9
+	apt-get install -y --no-install-recommends \
+		iproute2 \
+		iputils-ping \
+		bind9 && \
+	apt-get autoremove -y && \
+	apt-get autoclean && \
+	rm -rf /var/lib/apt/lists/*
 
 CMD ["/mnt/dns/dns_init.sh"]
+

@@ -7,6 +7,11 @@ global:
     ue: MAX_NUM_UE
 
 sgwc:
+    time:
+      message:
+        # Match SMF's transaction window so Create Session requests are not
+        # retransmitted while SMF is still waiting on Gx/PFCP under burst load.
+        duration: 20000
     gtpc:
       server:
         - address: SGWC_IP
@@ -16,3 +21,4 @@ sgwc:
       client:
         sgwu:
           - address: SGWU_IP
+

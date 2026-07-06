@@ -24,20 +24,22 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-FROM ubuntu:jammy
+FROM ubuntu:jammy AS builder
 
 ARG LICENSE=OFF
 ENV LICENSE=${LICENSE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install updates and dependencies
+# Install build dependencies only in the builder stage.
 RUN apt-get update && \
-	apt-get -y install mysql-server tcpdump screen tmux ntp ntpdate git-core dkms \
+	apt-get -y install --no-install-recommends git-core \
 					gcc flex bison libmysqlclient-dev make libssl-dev libcurl4-openssl-dev \
 					libxml2-dev libpcre2-dev bash-completion g++ autoconf libmnl-dev \
 					libsctp-dev libradcli-dev libradcli4 libjson-c-dev pkg-config iproute2 net-tools \
-					iputils-ping libgcrypt20-dev libjansson-dev libevent-dev libnghttp2-dev uuid-dev
+					iputils-ping libgcrypt20-dev libjansson-dev libevent-dev libnghttp2-dev uuid-dev \
+					ca-certificates && \
+	rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p /var/log/kamailio/
 
@@ -47,8 +49,11 @@ RUN chmod 777 /usr/lib64/libLwsLicenseCheck.so
 
 # Fetch Kamailio code
 RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
-	git clone https://github.com/ganeshsskumar/kamailio && \
-	cd kamailio && git checkout 02b50932040e922839053300748739da9ea29dd6
+	git init kamailio && \
+	cd kamailio && \
+	git remote add origin https://github.com/ganeshsskumar/kamailio && \
+	git fetch --depth 1 origin 02b50932040e922839053300748739da9ea29dd6 && \
+	git checkout FETCH_HEAD
 
 # Build and Install Kamailio
 RUN cd /usr/local/src/kamailio && make cfg
@@ -59,9 +64,53 @@ RUN if [ "$LICENSE" = "ON" ]; then \
 COPY modules.lst /usr/local/src/kamailio/src
 
 RUN cd /usr/local/src/kamailio && \
-	make -j`nproc` Q=0 all | tee make_all.txt && \
-	make install | tee make_install.txt && \
-	ldconfig
+	make -j`nproc` Q=0 all && \
+	make install && \
+	(find /usr/local -type f \( -path '*/sbin/*' -o -path '*/lib/*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true)
+
+FROM ubuntu:jammy
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+	apt-get -y install --no-install-recommends \
+		ca-certificates \
+		default-mysql-client \
+		iproute2 \
+		iputils-ping \
+		net-tools \
+		libcurl4 \
+		libevent-2.1-7 \
+		libevent-openssl-2.1-7 \
+		libgcrypt20 \
+		libjansson4 \
+		libjson-c5 \
+		libmnl0 \
+		libmysqlclient21 \
+		libnghttp2-14 \
+		libpcre2-8-0 \
+		libpcre3 \
+		libradcli4 \
+		libsctp1 \
+		libssl3 \
+		libuuid1 \
+		libxml2 && \
+	rm -rf /var/lib/apt/lists/*
+
+# Copy Kamailio runtime files only — omit 312MB build source tree not needed at runtime.
+# The full COPY --from=builder /usr/local /usr/local was replaced with targeted copies
+# to exclude /usr/local/src (312MB), /usr/local/include (headers), and /usr/local/share/doc.
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/etc /usr/local/etc
+COPY --from=builder /usr/local/lib /usr/local/lib
+COPY --from=builder /usr/local/lib64 /usr/local/lib64
+COPY --from=builder /usr/local/sbin /usr/local/sbin
+COPY --from=builder /usr/local/share/kamailio /usr/local/share/kamailio
+# SQL schema files needed by init scripts for MySQL database setup at container startup
+COPY --from=builder /usr/local/src/kamailio/utils/kamctl/mysql /usr/local/src/kamailio/utils/kamctl/mysql
+COPY --from=builder /usr/local/src/kamailio/misc/examples/ims/icscf /usr/local/src/kamailio/misc/examples/ims/icscf
+
+RUN mkdir -p /var/log/kamailio/ && ldconfig
 
 COPY kamailio-cdr /etc/logrotate.d/kamailio-cdr
 
@@ -69,5 +118,9 @@ COPY cdr_logger.sh /usr/local/bin/cdr-logger.sh
 
 RUN chmod +x /usr/local/bin/cdr-logger.sh
 
+COPY license/libLwsLicenseCheck.so /usr/lib64/
+RUN chmod 755 /usr/lib64/libLwsLicenseCheck.so
+
 COPY kamailio_init.sh /
 CMD ["/kamailio_init.sh"]
+

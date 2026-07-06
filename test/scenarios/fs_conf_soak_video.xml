@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Single-conference SOAK leg (audio+video / ViLTE), UAC -> FreeSWITCH.
+  Same as fs_conf_soak_audio.xml but offers an H.264 video m-line so the leg
+  joins a VIDEO conference. Audio uses [media_port] + -rtp_echo to keep the
+  channel alive past rtp-timeout; the video m-line exercises video-conference
+  negotiation (SIPp does not source H.264 RTP, so video media itself is idle —
+  full video media load requires real UEs).
+
+  Usage (per leg, parallel):
+    sipp FS_IP:5090 -sf fs_conf_soak_video.xml -s <ROOM> -i LOCAL_IP -p <SIP_PORT> -mp <RTP_PORT> -m 1 -l 1 -rtp_echo
+-->
+<scenario name="Conference soak leg (video)">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540700@[local_ip]:[local_port]>
+      Allow: INVITE,ACK,BYE,CANCEL,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=sipp 1 1 IN IP4 [local_ip]
+      s=Conference Soak Video
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio [media_port] RTP/AVP 8 0 96
+      a=rtpmap:8 PCMA/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:96 AMR-WB/16000
+      a=sendrecv
+      m=video 30000 RTP/AVP 97
+      a=rtpmap:97 H264/90000
+      a=fmtp:97 profile-level-id=42e01e;packetization-mode=1
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="180" optional="true" timeout="5000"/>
+  <recv response="183" optional="true" timeout="5000"/>
+  <recv response="200" rtd="true" timeout="10000"/>
+
+  <send>
+    <![CDATA[
+      ACK sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 1 ACK
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <pause milliseconds="150000"/>
+
+  <send retrans="500">
+    <![CDATA[
+      BYE sip:[service]@[remote_ip]:[remote_port] SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540700@[local_ip]>;tag=[call_number]
+      To: <sip:[service]@[remote_ip]:[remote_port]>[peer_tag_param]
+      Call-ID: [call_id]
+      CSeq: 2 BYE
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <recv response="200" timeout="5000"/>
+
+</scenario>

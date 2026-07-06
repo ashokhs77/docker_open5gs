@@ -36,10 +36,31 @@ hss:
   client_socket_timeout: 120
 
   #The maximum time to wait, in seconds, before discarding a diameter request.
-  diameter_request_timeout: 7
+  # Raised from 7s to 15s so that queued AIR/ULR requests from a 1024-UE
+  # simultaneous attach burst are not discarded before the freeDiameter thread
+  # pool (AppServThreads=64) can drain the queue.
+  # A value of 15s matches T3410 (UE attach timeout) giving the HSS the
+  # full window available before the UE gives up and re-tries.
+  diameter_request_timeout: 15
+
+  # Diameter socket-reader workers. The HSS response path is handled by
+  # hssService workers started in pyhss_init.sh; keep both sides sized together.
+  diameter_service_workers: 32
+
+  # Keep burst Diameter requests distributed across hssService workers instead
+  # of allowing one worker to drain the whole Redis queue serially.
+  hss_service_bulk_count: 1
+
+  # How often (in seconds) to sweep expired emergency subscribers. The sweep
+  # runs at most once per this interval instead of on every Diameter message,
+  # keeping that DB/redis work off the hot request path. 0 = sweep every
+  # message (no throttling). Default 60.
+  emergency_cleanup_interval: 60
 
   #The amount of time, in seconds, before purging a disconnected client from the Active Diameter Peers key in redis.
-  active_diameter_peers_timeout: 10
+  # Keep this aligned with the Diameter watchdog interval so transient load
+  # spikes do not purge peers before freeDiameter has revalidated the link.
+  active_diameter_peers_timeout: 30
 
   #Prevent updates from being performed without a valid 'Provisioning-Key' in the header
   lock_provisioning: False
@@ -61,7 +82,7 @@ hss:
   Default_Sh_UserData: 'INSTALL_PREFIX/default_sh_user_data.xml'
 
   send_dwr: True
-  send_dwr_interval: 10
+  send_dwr_interval: 30
 
 
   #S-CSCF Pool
@@ -86,12 +107,12 @@ api:
 
 benchmarking:
   # Whether to enable benchmark logging
-  enabled: True
+  enabled: False
   # How often to report, in seconds. Not all benchmarking supports interval reporting.
   reporting_interval: 300
 
 eir:
-  imsi_imei_logging: True    #Store current IMEI / IMSI pair in backend
+  imsi_imei_logging: False    #Store current IMEI / IMSI pair in backend
   no_match_response: 2       #Greylist
   store_offnet_imsi: False  # Whether or not to store an IMEI / IMSI pair that doesn't exist in the AUC
   simSwapNotification: False # If the IMEI for a stored IMSI/IMEI combo changes, notify the webhook endpoint
@@ -105,9 +126,9 @@ logging:
     metric_logging_file: INSTALL_PREFIX/log/metrics.log
   log_to_terminal: True
   sqlalchemy_sql_echo: False
-  sqlalchemy_pool_recycle: 15
-  sqlalchemy_pool_size: 50
-  sqlalchemy_max_overflow: 20
+  sqlalchemy_pool_recycle: 300
+  sqlalchemy_pool_size: 100
+  sqlalchemy_max_overflow: 50
 
 ## Database Parameters
 database:
@@ -152,3 +173,4 @@ prometheus:
 snmp:
   port: 1161
   listen_address: 127.0.0.1
+

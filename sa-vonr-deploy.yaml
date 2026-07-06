@@ -1,6 +1,19 @@
 services:
   mongo:
-    image: mongo:6.0
+    # MongoDB version policy:
+    #   PRODUCTION / deployment  →  mongo:6.0   (uses mongosh shell)
+    #   Test-suite VM (VirtualBox) → mongo:4.4   (uses legacy mongo shell)
+    #
+    # Reason for 4.4 on the test VM:
+    #   mongo:5.0+ requires an AVX-capable CPU.  VirtualBox masks the host's
+    #   AVX from the guest, so mongo:5.0+ crashes with SIGILL (exit 132).
+    #   Fix for the VM: VBoxManage modifyvm "<vm>" --cpu-profile host, or run this
+    #   compose file with MONGO_IMAGE=mongo:4.4 only on the constrained test VM.
+    #
+    # The 5G test suite detects the available shell automatically via the
+    # mongo_eval() helper in test/lib/common_5g.sh — no test script changes
+    # are needed when switching between 4.4 (mongo) and 6.0 (mongosh).
+    image: ${MONGO_IMAGE:-mongo:6.0}
     container_name: mongo
     command: --bind_ip 0.0.0.0
     env_file:
@@ -506,6 +519,65 @@ services:
     networks:
       default:
         ipv4_address: ${SMSC_IP}
+  freeswitch:
+    build: ./freeswitch
+    image: docker_freeswitch
+    container_name: freeswitch
+    stop_grace_period: 30s
+    privileged: true
+    env_file:
+      - .env
+    environment:
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+    volumes:
+      - ./freeswitch:/mnt/freeswitch
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    command: ["/bin/bash", "/mnt/freeswitch/freeswitch_init.sh"]
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "5090/tcp"
+      - "5090/udp"
+      - "5092:5092/tcp"
+      - "5092:5092/udp"
+    networks:
+      default:
+        ipv4_address: ${FREESWITCH_IP}
+  mmsc:
+    # MMS Centre (Kannel bearerbox/smsbox + Mbuni MMSC).
+    # In 5G SA the SMPP SMS notification path goes to the SMSC (Kamailio)
+    # instead of OsmoMSC (which is a 2G/3G circuit-switched component).
+    # MMS content is delivered over the UE's internet PDU session (ogstun).
+    build: ./mmsc
+    image: mmsc
+    container_name: mmsc
+    network_mode: host
+    dns: ${DNS_IP}
+    volumes:
+      - ./mmsc/kannel.conf:/usr/local/kannel/etc/kannel.conf
+      - ./mmsc/kannel_5g.conf:/usr/local/kannel/etc/kannel_5g.conf
+      - ./mmsc/mbuni.conf:/usr/local/mbuni/etc/mbuni.conf
+      - mms_storage:/tmp/mms-storage
+      - ./mmsc/nib_registry.conf:/etc/mmsc/nib_registry.conf
+      - ./mmsc/resolve_mmsc.sh:/etc/mmsc/resolve_mmsc.sh
+      - ./mmsc/mm4_receiver.py:/etc/mmsc/mm4_receiver.py
+      - ./mmsc/mmsc_init.sh:/mmsc_init.sh
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    entrypoint: ["bash", "-c", "chmod 777 /etc/mmsc/resolve_mmsc.sh && bash /mmsc_init.sh"]
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=mmsc
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+      # 5G SA: mmsc_init.sh uses kannel_5g.conf (HTTP→SMSC xhttp) instead of
+      # kannel.conf (SMPP→OsmoMSC).  SMSC_IP is substituted into kannel_5g.conf.
+      - DEPLOY_MODE=5G
+      - SMSC_IP=${SMSC_IP}
+    depends_on:
+      - smsc
   grafana:
     image: grafana/grafana:11.3.0
     container_name: grafana
@@ -544,3 +616,6 @@ volumes:
     name: docker_open5gs_mongodbdata
   dbdata:
     name: docker_open5gs_dbdata
+  mms_storage:
+    name: docker_open5gs_mms_storage
+

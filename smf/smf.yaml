@@ -16,6 +16,12 @@ global:
 
 smf:
     freeDiameter: /open5gs/install/etc/freeDiameter/smf.conf
+    time:
+      message:
+        # Open5GS derives GTPv2-C/PFCP transaction timers from this value.
+        # A longer window avoids premature SGW-C/SMF transaction expiry while
+        # burst call-pair setup is still waiting on Gx/PFCP completion.
+        duration: 20000
     sbi:
       server:
         - address: SMF_IP
@@ -62,3 +68,4 @@ smf:
       server:
         - address: SMF_IP
           port: 9091
+

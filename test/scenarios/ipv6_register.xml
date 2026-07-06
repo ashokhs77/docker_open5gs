@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  IPv6 Dual-Stack REGISTER Test
+  Sends a SIP REGISTER with IPv6 addresses in Via and Contact headers.
+  Verifies the P-CSCF returns any non-5xx response (401 challenge or 200 OK).
+
+  A 5xx response indicates the P-CSCF cannot handle IPv6 syntax at all.
+
+  Scenario: REGISTER → mandatory recv (any code) → optional absorb recvs.
+  No re-REGISTER send — avoids the SIPp structural rule requiring a mandatory
+  recv between consecutive sends (optional recv → send = error).
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf ipv6_register.xml -i [LOCAL_IP] \
+         -p 9305 -m 1 -l 1 -timeout 15
+
+  IMS_DOMAIN is replaced at runtime by run_sipp_templated().
+
+  NOTE: This test only verifies signaling-plane IPv6 syntax acceptance.
+  Media-plane IPv6 (c= IN IP6) would require IPv6-capable RTPEngine.
+-->
+<scenario name="IPv6 REGISTER">
+
+  <!-- Initial REGISTER with IPv6 Contact -->
+  <send retrans="500">
+    <![CDATA[
+      REGISTER sip:IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876540001@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 REGISTER
+      Contact: <sip:9876540001@[local_ip]:[local_port]>;+g.3gpp.icsi-ref="urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel"
+      Expires: 3600
+      Allow: INVITE,ACK,BYE,CANCEL,REGISTER,OPTIONS,UPDATE,REFER,NOTIFY
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- P-CSCF challenges with 401 (mandatory — IMS always requires auth on first REGISTER).
+       A 5xx here would indicate the P-CSCF can't parse the signaling syntax at all.
+       NOTE: response="0" (accept-any) is not implemented in the SIPp binary used here;
+       use explicit 401 which is the only valid IMS first-REGISTER response. -->
+  <recv response="401" timeout="10000"/>
+
+  <!-- Absorb subsequent responses (200 if no auth, or other codes) -->
+  <recv response="200" optional="true" timeout="3000"/>
+  <recv response="403" optional="true" timeout="3000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

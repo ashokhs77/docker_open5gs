@@ -60,9 +60,12 @@
     -->
     <param name="max-sessions" value="1000"/>
     <!--Most channels to create per second -->
-    <param name="sessions-per-second" value="30"/>
+    <!-- Raised from 30 → 100 to support burst call setup for 32+ VoLTE conference pairs.
+         At 30/sec, setting up 64 channels (32 pairs) takes >2s and triggers INVITE timeouts.
+         100/sec completes the same burst in ~0.6s, well within any SIP timer. -->
+    <param name="sessions-per-second" value="100"/>
     <!-- Default Global Log Level - value is one of debug,info,notice,warning,err,crit,alert -->
-    <param name="loglevel" value="debug"/>
+    <param name="loglevel" value="warning"/>
 
     <!-- Set the core DEBUG level (0-10) -->
     <!-- <param name="debug-level" value="10"/> -->
@@ -206,4 +209,5 @@
   </settings>
 
 </configuration>
+
 

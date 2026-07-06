@@ -1,0 +1,120 @@
+# 5G SA + VoNR integration test runner.
+#   internal (default): runner + core on the same VM (joins docker_open5gs_default)
+#   external (--profile external): runner on a separate generator VM (host network)
+#     targeting a remote 5G core — see EXTERNAL_LOAD_GENERATOR_MODE.txt.
+x-sipp-test-5g-common: &sipp-test-5g-common
+  build:
+    context: .
+    dockerfile: Dockerfile.5g
+  image: docker_test_5g
+  privileged: true
+  cap_add:
+    - NET_ADMIN
+  env_file:
+    - ../.env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - ./lib:/opt/test/lib:ro
+    - ./features:/opt/test/features:ro
+    - ./scenarios:/opt/test/scenarios:ro
+    - ./ueransim:/opt/test/ueransim:ro
+    - ./run_tests_5g.sh:/opt/test/run_tests_5g.sh:ro
+    - ./reports:/opt/test/reports
+
+x-sipp-test-5g-env: &sipp-test-5g-env
+  # 5G Core NFs
+  AMF_IP: ${AMF_IP:-172.22.1.10}
+  AMF_SBI_PORT: ${AMF_SBI_PORT:-7777}
+  NRF_IP: ${NRF_IP:-172.22.1.12}
+  NRF_PORT: ${NRF_PORT:-7777}
+  SCP_IP: ${SCP_IP:-172.22.1.35}
+  SCP_PORT: ${SCP_PORT:-7777}
+  AUSF_IP: ${AUSF_IP:-172.22.1.11}
+  AUSF_PORT: ${AUSF_PORT:-7777}
+  UDM_IP: ${UDM_IP:-172.22.1.13}
+  UDM_PORT: ${UDM_PORT:-7777}
+  UDR_IP: ${UDR_IP:-172.22.1.14}
+  UDR_PORT: ${UDR_PORT:-7777}
+  PCF_IP: ${PCF_IP:-172.22.1.27}
+  PCF_PORT: ${PCF_PORT:-7777}
+  BSF_IP: ${BSF_IP:-172.22.1.29}
+  BSF_PORT: ${BSF_PORT:-7777}
+  NSSF_IP: ${NSSF_IP:-172.22.1.28}
+  NSSF_PORT: ${NSSF_PORT:-7777}
+  SMF_IP: ${SMF_IP:-172.22.1.7}
+  SMF_SBI_PORT: ${SMF_SBI_PORT:-7777}
+  UPF_IP: ${UPF_IP:-172.22.1.8}
+  # IMS components (shared with 4G stack)
+  PCSCF_IP: ${PCSCF_IP:-172.22.1.21}
+  PCSCF_PORT: ${PCSCF_PORT:-5060}
+  ICSCF_IP: ${ICSCF_IP:-172.22.1.19}
+  SCSCF_IP: ${SCSCF_IP:-172.22.1.20}
+  FREESWITCH_IP: ${FREESWITCH_IP:-172.22.1.150}
+  PYHSS_IP: ${PYHSS_IP:-172.22.1.18}
+  SMSC_IP: ${SMSC_IP:-172.22.1.33}
+  RTPENGINE_IP: ${RTPENGINE_IP:-host.docker.internal}
+  # Infrastructure
+  MONGO_IP: ${MONGO_IP:-172.22.1.2}
+  MYSQL_IP: ${MYSQL_IP:-172.22.1.17}
+  DNS_IP: ${DNS_IP:-172.22.1.15}
+  NIB: ${NIB:-1}
+  IMS_DOMAIN: ${IMS_DOMAIN:-ims.mnc001.mcc001.3gppnetwork.org}
+  MCC: ${MCC:-001}
+  MNC: ${MNC:-01}
+  MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-MySQL_PaSsW0rD}
+  DOCKER_HOST_IP: ${DOCKER_HOST_IP:-}
+  WEBUI_IP: ${WEBUI_IP:-172.22.1.26}
+  # Optional tuning
+  NRF_THROUGHPUT_ITERATIONS: ${NRF_THROUGHPUT_ITERATIONS:-50}
+  UDM_THROUGHPUT_ITERATIONS: ${UDM_THROUGHPUT_ITERATIONS:-20}
+  IPERF_DURATION: ${IPERF_DURATION:-5}
+  # Topology (internal default; external = run from a separate generator VM)
+  TEST_TOPOLOGY: ${TEST_TOPOLOGY:-internal}
+  CORE_TARGET_LABEL: ${CORE_TARGET_LABEL:-same-vm-docker}
+  CORE_VM_HOST: ${CORE_VM_HOST:-}
+  LOAD_GENERATOR_IP: ${LOAD_GENERATOR_IP:-}
+  DOCKER_HOST: ${DOCKER_HOST:-unix:///var/run/docker.sock}
+  INCLUDE_TEST_CONTAINER_STATS: ${INCLUDE_TEST_CONTAINER_STATS:-1}
+
+services:
+  sipp-test-5g:
+    <<: *sipp-test-5g-common
+    container_name: sipp-test-5g
+    environment:
+      <<: *sipp-test-5g-env
+      TEST_TOPOLOGY: ${TEST_TOPOLOGY:-internal}
+      LOCAL_IP: ${LOCAL_IP:-172.22.1.200}
+    networks:
+      default:
+        ipv4_address: 172.22.${NIB:-1}.200
+    dns:
+      - ${DNS_IP:-172.22.1.15}
+
+  # External generator mode runs this 5G test runner on the generator VM host
+  # network, targeting a 5G core on a different VM. All endpoint variables must
+  # point to addresses reachable from this VM (routed container IPs or published
+  # ports). UERANSIM (nr-gnb/nr-ue), if used, runs on the generator and connects
+  # to the remote AMF N2 (AMF_IP:38412).
+  #
+  # Example:
+  #   TEST_TOPOLOGY=external LOCAL_IP=<generator-ip> AMF_IP=<core-amf-ip> \
+  #     PCSCF_IP=<core-pcscf-ip> NRF_IP=<core-nrf-ip> \
+  #     sudo docker compose -f docker-compose.test5g.yaml --profile external \
+  #     run --remove-orphans sipp-test-external-5g --feature load_5g
+  sipp-test-external-5g:
+    <<: *sipp-test-5g-common
+    container_name: sipp-test-external-5g
+    profiles:
+      - external
+    network_mode: host
+    environment:
+      <<: *sipp-test-5g-env
+      TEST_TOPOLOGY: external
+      LOCAL_IP: ${LOCAL_IP:-}
+
+networks:
+  default:
+    name: docker_open5gs_default
+    external: true

@@ -1,0 +1,10 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.log
+logs/
+node_modules/
+npm-debug.log*
+

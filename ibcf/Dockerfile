@@ -28,8 +28,7 @@ FROM debian:bookworm
 
 # Install required packages
 RUN apt-get update \
-    && apt-get upgrade -y \
-    && apt-get install -y \
+    && apt-get install -y --no-install-recommends \
         lsb-release \
         ca-certificates \
         git \
@@ -39,23 +38,24 @@ RUN apt-get update \
         openssh-server \
         net-tools \
         iproute2 \
-    && apt-get clean
-RUN apt --no-install-recommends --assume-yes install unzip autoconf automake build-essential pkg-config libedit-dev libjansson-dev libsqlite3-dev uuid-dev libxslt1-dev xmlstarlet \
-    && apt clean
+    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get --no-install-recommends --assume-yes install unzip autoconf automake build-essential pkg-config libedit-dev libjansson-dev libsqlite3-dev uuid-dev libxslt1-dev xmlstarlet \
+    && rm -rf /var/lib/apt/lists/*
 
 # Download Asterisk source :
 WORKDIR /usr/src
-RUN git clone -b releases/22 https://github.com/asterisk/asterisk.git
+RUN git clone --depth 1 -b releases/22 https://github.com/asterisk/asterisk.git
 # Adding EVS and AMR support
 # First EVS 
 WORKDIR /usr/src/asterisk
 # install additional DEBs required by Asterisk
 RUN sh contrib/scripts/install_prereq install
 RUN sh contrib/scripts/get_mp3_source.sh
-RUN git clone https://github.com/NUCLEAR-WAR/asterisk-evs.git
+RUN git clone --depth 1 https://github.com/NUCLEAR-WAR/asterisk-evs.git
 RUN cp --verbose --recursive ./asterisk-evs*/* ./
 RUN patch -p0 <./codec_evs.patch
-RUN wget www.etsi.org/deliver/etsi_ts/126400_126499/126443/16.01.00_60/ts_126443v160100p0.zip
+RUN wget -q www.etsi.org/deliver/etsi_ts/126400_126499/126443/16.01.00_60/ts_126443v160100p0.zip
 RUN unzip -qq ts_126443v*.zip
 RUN unzip -qq 26443-*-ANSI-C_source_code.zip
 WORKDIR /usr/src/asterisk/c-code
@@ -72,8 +72,10 @@ RUN patch -p0 <./build_evs.patch
 RUN patch -p0 <./force_limitations.patch
 
 # Now AMR
-RUN apt --assume-yes install libopencore-amrnb-dev libopencore-amrwb-dev libvo-amrwbenc-dev
-RUN wget github.com/traud/asterisk-amr/archive/master.zip
+RUN apt-get update && \
+    apt-get --assume-yes install --no-install-recommends libopencore-amrnb-dev libopencore-amrwb-dev libvo-amrwbenc-dev && \
+    rm -rf /var/lib/apt/lists/*
+RUN wget -q github.com/traud/asterisk-amr/archive/master.zip
 RUN unzip -qq master.zip
 RUN rm master.zip
 RUN cp --verbose --recursive ./asterisk-amr*/* ./
@@ -85,8 +87,11 @@ RUN ./bootstrap.sh
 RUN ./configure
 COPY menuselect.makedeps .
 COPY menuselect.makeopts .
-RUN make && make install
+RUN make && make install && \
+    (find /usr/sbin /usr/lib/asterisk /usr/lib -type f \( -name 'asterisk' -o -name '*.so' -o -name '*.so.*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true) && \
+    rm -rf /usr/src/asterisk /root/.cache /tmp/*
 
 COPY config/* /etc/asterisk/
 
 CMD ["/mnt/ibcf/start-asterisk.sh"]
+

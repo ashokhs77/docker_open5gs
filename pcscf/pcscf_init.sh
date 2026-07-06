@@ -77,6 +77,7 @@ fi
 
 sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_pcscf/pcscf.cfg
+sed -i 's|CDP_LATENCY_THRESHOLD_MS_ENV|'${PCSCF_CDP_LATENCY_THRESHOLD_MS:-10000}'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|SCP_IP|'$SCP_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|PCSCF_PUB_IP|'$PCSCF_PUB_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_pcscf/pcscf.cfg
@@ -106,7 +107,20 @@ ip r add ${UE_IPV4_IMS} via ${UPF_IP}
 ip r add ${UE_IPV4_INTERNET} via ${UPF_IP}
 
 rm -f /kamailio_pcscf.pid
-exec kamailio -f /etc/kamailio_pcscf/kamailio_pcscf.cfg -P /kamailio_pcscf.pid -m 128 -M 1024 -DD -E -e $@
+
+# IMS log capture — writes to ./log/pcscf.log on the host via named pipe + tee.
+# Set IMS_LOG_ENABLED=false in .env (or docker-compose environment) to disable.
+IMS_LOG_DIR="/open5gs/install/var/log/open5gs"
+if [ "${IMS_LOG_ENABLED:-true}" = "true" ]; then
+    mkdir -p "$IMS_LOG_DIR"
+    _PIPE="/tmp/kamailio_pcscf_$$.pipe"
+    mkfifo "$_PIPE"
+    # tee duplicates output: stdout (Docker log) + log file
+    tee -a "${IMS_LOG_DIR}/pcscf.log" < "$_PIPE" &
+    exec kamailio -f /etc/kamailio_pcscf/kamailio_pcscf.cfg -P /kamailio_pcscf.pid -m 128 -M 64 -DD -E -e "$@" > "$_PIPE" 2>&1
+fi
+exec kamailio -f /etc/kamailio_pcscf/kamailio_pcscf.cfg -P /kamailio_pcscf.pid -m 128 -M 64 -DD -E -e "$@"
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
