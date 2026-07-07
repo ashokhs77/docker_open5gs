@@ -31,6 +31,18 @@ presence‑audits that build no capability, and REAL_HW‑gated conformance poin
 
 ## 2. Prerequisites
 
+**⚠ Required first — enable `WITH_SIPP_TEST` on the P-CSCF.** The suite drives the IMS with
+synthetic SIPp/Python UE clients that skip the full IPSec/Sec-Agree handshake a real UE
+performs; the `#!define WITH_SIPP_TEST` macro turns on the matching test-client bypasses in
+the P-CSCF REGISTER/MO/MT routes. **Without it the VoLTE/ViLTE/SMS/conference SIPp tests
+4xx-fail or hang.** It is enabled (uncommented) at `pcscf/kamailio_pcscf.cfg:20` in this test
+branch — verify before bringing the stack up (uncomment it if needed; if you enable it after
+the stack is already up, apply with `sudo docker restart pcscf`):
+
+```bash
+cd ~/docker_open5gs && grep -n '^#!define WITH_SIPP_TEST' pcscf/kamailio_pcscf.cfg   # must print a match
+```
+
 1. **The 4G stack must be running** (`4g-volte-deploy.yaml`): mme, sgwc, sgwu, smf, upf,
    pcscf, icscf, scscf, pyhss, mysql, dns, freeswitch, rtpengine, smsc, (mmsc). Bring it up with:
    ```bash

@@ -23,17 +23,26 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
 --------------------------------------------------------------------------------
  0. PREREQUISITES
 --------------------------------------------------------------------------------
-  # The 5G stack must be running:
+  # (1) REQUIRED: enable WITH_SIPP_TEST on the (shared) P-CSCF BEFORE starting the stack.
+  #     VoNR/ViNR/SMS/conference tests drive the shared IMS with synthetic SIPp UE
+  #     clients; this macro turns on the P-CSCF test-client bypasses. Without it those
+  #     SIPp tests 4xx-fail or hang. Enabled by default at pcscf/kamailio_pcscf.cfg:20
+  #     in this test branch -- verify:
   cd ~/docker_open5gs
+  grep -n '^#!define WITH_SIPP_TEST' pcscf/kamailio_pcscf.cfg    # must print a match
+  #     (if commented out, uncomment it; if the stack is already up, then:
+  #      sudo docker restart pcscf)
+
+  # (2) The 5G stack must be running:
   sudo docker compose -f sa-vonr-deploy.yaml up -d
 
-  # AVX-less host (QEMU/i440FX VM)? MongoDB >=5.0 SIGILLs -> use 4.4.
-  # In ~/docker_open5gs/.env set:   MONGO_IMAGE=mongo:4.4
-  # then:
+  # (3) AVX-less host (QEMU/i440FX VM)? MongoDB >=5.0 SIGILLs -> use 4.4.
+  #     In ~/docker_open5gs/.env set:   MONGO_IMAGE=mongo:4.4
+  #     then:
   sudo docker compose -f sa-vonr-deploy.yaml up -d --force-recreate mongo
   sudo docker restart pcf bsf udr udm webui        # NFs cache the mongo connection
 
-  # Run all test commands from the test directory:
+  # (4) Run all test commands from the test directory:
   cd ~/docker_open5gs/test
 
 

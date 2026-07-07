@@ -33,6 +33,18 @@ no OCS/CHF for charging, and REAL_HW‑gated data‑plane sweeps).
 
 ## 2. Prerequisites
 
+**⚠ Required first — enable `WITH_SIPP_TEST` on the (shared) P-CSCF.** VoNR/ViNR/SMS/conference
+tests drive the shared IMS with synthetic SIPp UE clients that skip the full IPSec/Sec-Agree
+handshake a real UE performs; the `#!define WITH_SIPP_TEST` macro turns on the matching
+test-client bypasses in the P-CSCF REGISTER/MO/MT routes. **Without it those SIPp tests
+4xx-fail or hang.** It is enabled (uncommented) at `pcscf/kamailio_pcscf.cfg:20` in this test
+branch — verify before bringing the stack up (uncomment it if needed; if you enable it after
+the stack is already up, apply with `sudo docker restart pcscf`):
+
+```bash
+cd ~/docker_open5gs && grep -n '^#!define WITH_SIPP_TEST' pcscf/kamailio_pcscf.cfg   # must print a match
+```
+
 1. **The 5G stack must be running** (`sa-vonr-deploy.yaml`):
    ```bash
    cd ~/docker_open5gs

@@ -22,11 +22,20 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
 --------------------------------------------------------------------------------
  0. PREREQUISITES
 --------------------------------------------------------------------------------
-  # The 4G stack must be running:
+  # (1) REQUIRED: enable WITH_SIPP_TEST on the P-CSCF BEFORE starting the stack.
+  #     The suite drives the IMS with synthetic SIPp/UE clients; this macro turns
+  #     on the P-CSCF test-client bypasses in the REGISTER/MO/MT routes. Without it
+  #     the VoLTE/ViLTE/SMS/conference tests 4xx-fail or hang. It is enabled by
+  #     default at pcscf/kamailio_pcscf.cfg:20 in this test branch -- verify:
   cd ~/docker_open5gs
+  grep -n '^#!define WITH_SIPP_TEST' pcscf/kamailio_pcscf.cfg    # must print a match
+  #     (if commented out, uncomment it; if the stack is already up, then:
+  #      sudo docker restart pcscf)
+
+  # (2) The 4G stack must be running:
   sudo docker compose -f 4g-volte-deploy.yaml up -d
 
-  # Run all test commands from the test directory:
+  # (3) Run all test commands from the test directory:
   cd ~/docker_open5gs/test
 
 
