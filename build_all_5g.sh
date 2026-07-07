@@ -172,16 +172,3 @@ docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSi
     || true
 
 echo ""
-echo "Next steps:"
-echo "  # Bring up the 5G SA + VoNR stack (deployment only — no test tooling needed):"
-echo "  sudo docker compose -f $COMPOSE_FILE up -d mongo mysql   # wait for them, then:"
-echo "  sudo docker compose -f $COMPOSE_FILE up -d"
-echo ""
-echo "  # To run the TEST SUITE, first build the test tooling (developer-only):"
-echo "  sudo bash test/build_test_5g.sh                 # builds docker_test_5g + UERANSIM"
-echo "  sudo bash test/ueransim/bringup_ueransim.sh     # start the 5G gNB+UE sim"
-echo "  sudo docker compose -f test/docker-compose.test5g.yaml run --rm sipp-test-5g --bundle trl8"
-echo ""
-echo "  # 5GC core smoke tests need NO UERANSIM:"
-echo "  sudo docker compose -f test/docker-compose.test5g.yaml run --rm sipp-test-5g --bundle 5gc"
-

@@ -50,7 +50,7 @@ wait_for_pcscf_ready() {
 
     while [ "$waited" -lt "$timeout" ]; do
         if check_port "$PCSCF_IP" "${PCSCF_PORT:-5060}" &&
-           docker exec pcscf kamcmd cdp.list_peers 2>/dev/null | grep -q "I_Open"; then
+           timeout 8 docker exec pcscf kamcmd cdp.list_peers 2>/dev/null | grep -q "I_Open"; then
             return 0
         fi
         sleep 1
@@ -98,7 +98,7 @@ reset_freeswitch_test_state() {
         local _pcscf_needs_restart=true
         if [ "$phase" = "Pre-regression" ] && \
            check_port "$PCSCF_IP" "${PCSCF_PORT:-5060}" && \
-           docker exec pcscf kamcmd core.version >/dev/null 2>&1; then
+           timeout 8 docker exec pcscf kamcmd core.version >/dev/null 2>&1; then
             _pcscf_needs_restart=false
         fi
 
@@ -158,7 +158,9 @@ get_restart_count() {
 
 check_cdp_peer_open() {
     local container="$1"
-    docker exec "$container" kamcmd cdp.list_peers 2>/dev/null | grep -q "I_Open"
+    # timeout guards against a hung/unresponsive kamailio ctl socket: kamcmd has no
+    # built-in timeout, so without this a dead P-CSCF freezes the whole suite.
+    timeout 8 docker exec "$container" kamcmd cdp.list_peers 2>/dev/null | grep -q "I_Open"
 }
 
 # Extract HTTP code from api_get/api_put output (last line)

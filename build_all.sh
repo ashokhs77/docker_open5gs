@@ -140,11 +140,3 @@ CURRENT_STEP="done"
 docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}' \
     | grep -E 'REPOSITORY|docker_open5gs|docker_kamailio|docker_dns|docker_rtpengine|docker_freeswitch|docker_mysql|docker_pyhss|docker_osmohlr|docker_osmomsc|^mmsc|docker_metrics' || true
 echo
-echo "Next steps:"
-echo "  # Bring up the 4G EPC + VoLTE stack (deployment only):"
-echo "  sudo docker compose -f $COMPOSE_FILE up -d"
-echo
-echo "  # To run the TEST SUITE, build the test runner first (developer-only):"
-echo "  sudo bash test/build_test.sh"
-echo "  sudo docker compose -f test/docker-compose.test.yaml run --rm sipp-test --bundle tec"
-

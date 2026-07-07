@@ -350,14 +350,21 @@ run_sms_tests() {
         else
             _sms_db "DELETE FROM smsc.messages WHERE text='SF-EXPIRY-PROBE';" >/dev/null 2>&1
             _sms_db "INSERT INTO smsc.messages (caller,callee,text,dcs,valid) VALUES ('9876540700','${SF_TO}','SF-EXPIRY-PROBE',0,DATE_SUB(NOW(),INTERVAL 49 HOUR));" >/dev/null 2>&1
-            local exp_before exp_after
+            local exp_before exp_after _w
             exp_before=$(_sms_db "SELECT COUNT(*) FROM smsc.messages WHERE text='SF-EXPIRY-PROBE';")
-            sleep 10
-            exp_after=$(_sms_db "SELECT COUNT(*) FROM smsc.messages WHERE text='SF-EXPIRY-PROBE';")
+            # Poll for the rtimer worker (3s cadence) to expire it — up to ~24s. A fixed
+            # short sleep is flaky under full-bundle load, where a worker pass can be slow
+            # (it also services offline store-and-forward SUBSCRIBEs before this DELETE).
+            exp_after=1; _w=0
+            while [ "$_w" -lt 24 ]; do
+                sleep 3; _w=$((_w + 3))
+                exp_after=$(_sms_db "SELECT COUNT(*) FROM smsc.messages WHERE text='SF-EXPIRY-PROBE';")
+                [ "${exp_after:-1}" -eq 0 ] 2>/dev/null && break
+            done
             if [ "${exp_before:-0}" -ge 1 ] 2>/dev/null && [ "${exp_after:-1}" -eq 0 ] 2>/dev/null; then
-                pass "48h expiry: a 49h-old stored SMS was discarded by the worker (before=${exp_before} -> after=${exp_after})"
+                pass "48h expiry: a 49h-old stored SMS was discarded by the worker (before=${exp_before} -> after=${exp_after}, ${_w}s)"
             else
-                fail "48h expiry: over-age SMS not discarded" "before=${exp_before}, after=${exp_after} (SEND_SMS must DELETE messages older than 172800s)"
+                fail "48h expiry: over-age SMS not discarded" "before=${exp_before}, after=${exp_after} after ${_w}s (SEND_SMS must DELETE messages older than 172800s)"
             fi
         fi
         # cleanup store-and-forward residue for the test recipient
