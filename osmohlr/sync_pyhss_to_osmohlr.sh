@@ -3,7 +3,9 @@
 # PyHSS → OsmoHLR Subscriber Sync Script
 # Fetches all subscribers from PyHSS API (paginated) and syncs to OsmoHLR
 # - INSERT OR IGNORE: only inserts new subscribers (preserves existing IDs)
-# - UPDATE: updates MSISDN if it changed for an existing IMSI
+# - UPDATE OR IGNORE: updates MSISDN for an existing IMSI, skipping the update
+#   when it would collide with osmoHLR's UNIQUE(msisdn) (two IMSIs sharing an
+#   MSISDN). Duplicate MSISDNs in PyHSS are logged as warnings, not fatal.
 # PyHSS uses zero-based pagination: page=0, page=1, page=2...
 # Usage: ./sync_pyhss_to_osmohlr.sh
 # =============================================================================
@@ -56,33 +58,62 @@ except:
         return 1  # No more data
     fi
 
+    # osmoHLR's subscriber.msisdn column is UNIQUE. Two guards keep a single bad
+    # row from aborting the whole page:
+    #   - INSERT OR IGNORE : skip an IMSI/MSISDN that already exists
+    #   - UPDATE OR IGNORE : skip the MSISDN update if it would collide with the
+    #     MSISDN already held by a *different* IMSI (an HLR cannot have two
+    #     subscribers on the same MSISDN, so skipping is the only valid outcome)
+    # Duplicate MSISDNs (same number claimed by >1 IMSI in PyHSS) are reported to
+    # stderr as "DUP_MSISDN ..." so they are surfaced as warnings, not silently
+    # dropped — fix the source data if these are unexpected.
+    local DUP_FILE
+    DUP_FILE=$(mktemp)
     local SQL=$(echo "$PAGE_DATA" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
+by_msisdn = {}
+for sub in data:
+    imsi   = str(sub.get('imsi', '')).strip()
+    msisdn = str(sub.get('msisdn', '')).strip()
+    if imsi and msisdn and msisdn != 'None':
+        by_msisdn.setdefault(msisdn, []).append(imsi)
+for msisdn, imsis in by_msisdn.items():
+    if len(imsis) > 1:
+        sys.stderr.write(f\"DUP_MSISDN {msisdn} -> {','.join(imsis)}\n\")
 stmts = []
 for sub in data:
     imsi   = str(sub.get('imsi', '')).strip()
     msisdn = str(sub.get('msisdn', '')).strip()
     if imsi and msisdn and msisdn != 'None':
         stmts.append(f\"INSERT OR IGNORE INTO subscriber (imsi, msisdn) VALUES ('{imsi}', '{msisdn}');\")
-        stmts.append(f\"UPDATE subscriber SET msisdn='{msisdn}' WHERE imsi='{imsi}';\")
+        stmts.append(f\"UPDATE OR IGNORE subscriber SET msisdn='{msisdn}' WHERE imsi='{imsi}';\")
 print(' '.join(stmts))
-")
+" 2>"$DUP_FILE")
+
+    if [ -s "$DUP_FILE" ]; then
+        while IFS= read -r _dline; do
+            log_warn "Page $PAGE_NUM: duplicate MSISDN in PyHSS — ${_dline#DUP_MSISDN } (only first IMSI keeps it in OsmoHLR)"
+        done < "$DUP_FILE"
+    fi
+    rm -f "$DUP_FILE"
 
     if [ -z "$SQL" ]; then
         log_warn "Page $PAGE_NUM: no valid subscribers found"
         return 0
     fi
 
-    docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" "$SQL"
+    # OR IGNORE means row-level conflicts never error. A non-zero exit here is a
+    # systemic problem (bad SQL, container gone) — log it and keep going rather
+    # than aborting the whole run over one page.
+    local OUT
+    OUT=$(docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" "$SQL" 2>&1)
     if [ $? -eq 0 ]; then
         log_info "Page $PAGE_NUM: synced $COUNT subscribers"
     else
-        log_error "Page $PAGE_NUM: SQL execution failed!"
-        return 2
+        log_warn "Page $PAGE_NUM: sqlite3 reported an issue (continuing): ${OUT}"
     fi
 
-    echo "$COUNT"
     return 0
 }
 
@@ -118,14 +149,8 @@ except:
         break
     fi
 
-    # Sync this page
+    # Sync this page (row-level conflicts are skipped, not fatal)
     sync_page "$PAGE_DATA" "$PAGE"
-    EXIT=$?
-
-    if [ $EXIT -eq 2 ]; then
-        log_error "Stopping due to SQL error on page ${PAGE}"
-        exit 1
-    fi
 
     TOTAL_SYNCED=$((TOTAL_SYNCED + COUNT))
     log_info "Running total synced: ${TOTAL_SYNCED}"

@@ -41,6 +41,62 @@ if [ -z "${LOCAL_IP:-}" ]; then
 fi
 IMS_DOMAIN="${IMS_DOMAIN:-ims.mnc001.mcc001.3gppnetwork.org}"
 
+# ============================================================
+# PLMN & phone-type (UE profile) helpers
+# ------------------------------------------------------------
+# The core is deployed as ONE PLMN at a time (the DNS server serves a single
+# ims.mncXXX.mccYYY zone derived from MNC/MCC at container init). The suite is
+# therefore PLMN-parameterised via IMS_DOMAIN: deploy the core as 001-01 or
+# 404-20 and point the runner at the matching IMS_DOMAIN. These helpers let the
+# tests self-identify the active PLMN, verify it is one we support, and drive
+# per-phone-type behaviour (Optimus/MTK vs Samsung) that the P-CSCF gates on the
+# User-Agent (e.g. the sec-agree -> 420 fallback is MTK-only).
+# ============================================================
+
+# PLMNs this deployment is validated against. Space-separated "mcc-mnc" labels.
+SUPPORTED_PLMNS="${SUPPORTED_PLMNS:-001-01 404-20}"
+
+# Derive the "mcc-mnc" label from an IMS domain (ims.mnc020.mcc404... -> 404-20).
+plmn_label_from_domain() {
+    local dom="$1"
+    local mnc mcc
+    mnc=$(printf '%s' "$dom" | sed -nE 's/.*mnc([0-9]{2,3})\..*/\1/p')
+    mcc=$(printf '%s' "$dom" | sed -nE 's/.*mcc([0-9]{3})\..*/\1/p')
+    [ -z "$mnc" ] || [ -z "$mcc" ] && { echo ""; return 1; }
+    # Strip a single leading zero from a 3-char MNC that is really 2 digits
+    # (mnc020 -> 20) so the label matches the human "404-20" form.
+    if [ ${#mnc} -eq 3 ] && [ "${mnc:0:1}" = "0" ]; then
+        mnc="${mnc:1}"
+    fi
+    printf '%s-%s' "$mcc" "$mnc"
+}
+
+# Label of the PLMN currently under test (from IMS_DOMAIN).
+ACTIVE_PLMN_LABEL="$(plmn_label_from_domain "$IMS_DOMAIN")"
+
+# True if $1 (a "mcc-mnc" label) is in SUPPORTED_PLMNS.
+plmn_is_supported() {
+    local want="$1" p
+    for p in $SUPPORTED_PLMNS; do
+        [ "$p" = "$want" ] && return 0
+    done
+    return 1
+}
+
+# Phone-type User-Agent profiles. Both Optimus and Samsung retain Gm IPsec;
+# these strings select only handset-specific SDP/session interop handling.
+OPTIMUS_UA="${OPTIMUS_UA:-VoLTE/WFC UA}"
+SAMSUNG_UA="${SAMSUNG_UA:-SAMSUNG-SM-G991B-Android13 Samsung IMS-client/6.0}"
+
+# phone_ua PHONE  ->  the User-Agent string for that phone type.
+phone_ua() {
+    case "$1" in
+        optimus|mtk|Optimus|MTK) echo "$OPTIMUS_UA" ;;
+        samsung|Samsung)         echo "$SAMSUNG_UA" ;;
+        *)                       echo "SIPp-Test-UA" ;;
+    esac
+}
+
 # Docker host IP: where host-networked services (MMSC runs network_mode: host) and
 # host-published ports are reachable from the test runner. Prefer an explicit value;
 # otherwise auto-detect this container's default gateway (= the Docker host) so the
@@ -1452,11 +1508,15 @@ append_report_block() {
         content="(no data)"
     fi
 
+    # Evidence blocks (resource snapshots, Diameter peer dumps, AAR traces, log
+    # excerpts) ALWAYS go to the per-feature report file. Echoing them to the
+    # console too floods the terminal; gate that behind VERBOSE_DIAG so the
+    # console shows only PASS/FAIL/SKIP lines + feature headers by default.
     echo "       ${title}:" >> "$_FEATURE_REPORT"
-    log "       ${title}:"
+    [ "${VERBOSE_DIAG:-0}" = "1" ] && log "       ${title}:"
     while IFS= read -r line; do
         echo "         ${line}" >> "$_FEATURE_REPORT"
-        log "         ${line}"
+        [ "${VERBOSE_DIAG:-0}" = "1" ] && log "         ${line}"
     done <<< "$content"
 }
 

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Phone-profiled intra-NIB ViLTE INVITE (audio + video).
+
+  Same as vilte_intra_nib_invite.xml but carries a USER_AGENT token so the video
+  call can be sent with a specific phone-type User-Agent (Optimus "VoLTE/WFC UA"
+  or Samsung) via run_sipp_profiled(). Validates that a video INVITE from each
+  phone type routes through the IMS chain (P-CSCF video SDP + RTPEngine) on the
+  active PLMN without a 5xx.
+
+  IMS_DOMAIN and USER_AGENT are replaced at runtime by run_sipp_templated().
+  Test passes on any non-5xx response. Fails only on 5xx.
+-->
+<scenario name="Phone-profiled ViLTE INVITE">
+
+  <send retrans="500">
+    <![CDATA[
+      INVITE sip:[service]@IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:9876540001@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:9876541000@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 INVITE
+      Contact: <sip:9876540001@[local_ip]:[local_port]>
+      User-Agent: USER_AGENT
+      P-Asserted-Identity: <sip:9876540001@IMS_DOMAIN>
+      Allow: INVITE,ACK,BYE,CANCEL,OPTIONS,UPDATE
+      Content-Type: application/sdp
+      Content-Length: [len]
+
+      v=0
+      o=- [call_number] [call_number] IN IP4 [local_ip]
+      s=ViLTE Phone-Profiled Test
+      c=IN IP4 [local_ip]
+      t=0 0
+      m=audio 9360 RTP/AVP 96 0 8
+      b=AS:25
+      a=rtpmap:96 AMR/8000
+      a=rtpmap:0 PCMU/8000
+      a=rtpmap:8 PCMA/8000
+      a=sendrecv
+      m=video 9362 RTP/AVP 99
+      b=AS:384
+      a=rtpmap:99 H264/90000
+      a=fmtp:99 profile-level-id=42801F
+      a=sendrecv
+    ]]>
+  </send>
+
+  <recv response="100" optional="true" timeout="5000"/>
+  <recv response="100" optional="true" timeout="3000"/>
+  <recv response="180" optional="true" timeout="3000"/>
+  <recv response="183" optional="true" timeout="3000"/>
+  <recv response="401" optional="true" timeout="3000"/>
+  <recv response="403" optional="true" timeout="3000"/>
+  <recv response="404" optional="true" timeout="3000"/>
+  <recv response="480" optional="true" timeout="3000"/>
+  <recv response="486" optional="true" timeout="3000"/>
+  <recv response="488" optional="true" timeout="3000"/>
+  <recv response="500" optional="true" timeout="3000"/>
+  <recv response="503" optional="true" timeout="3000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

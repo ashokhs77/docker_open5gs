@@ -13,6 +13,12 @@
 #   TC-7: RTPEngine health check
 #   TC-8: Intra-NIB VoLTE INVITE (caller and callee in same IMS domain)
 #   TC-9: Inter-NIB VoLTE INVITE (callee in external domain, non-5xx required)
+#   TC-10: Active PLMN identification & DNS zone consistency (001-01 / 404-20)
+#   TC-11: Optimus/MTK sec-agree REGISTER remains on Gm IPsec (not 420)
+#   TC-12: Samsung sec-agree REGISTER challenged with 401 (IPsec preserved)
+#   TC-13: VoLTE INVITE as Optimus/MTK UA on active PLMN (non-5xx)
+#   TC-14: VoLTE INVITE as Samsung UA on active PLMN (non-5xx)
+#   TC-15: Inter-NIB identity and media-transition anchoring guards deployed
 
 set +e  # Don't exit on errors - we handle them ourselves
 
@@ -207,6 +213,108 @@ run_volte_tests() {
                 fail "Inter-NIB VoLTE INVITE: No SIP response from P-CSCF — check P-CSCF connectivity" \
                      "$(echo "$inter_out" | tail -5)"
             fi
+        fi
+    fi
+
+    # ── PLMN & phone-type interop (Optimus/MTK vs Samsung, 001-01 / 404-20) ──
+
+    # TC-10: Active PLMN identification & DNS consistency
+    # The core is deployed as one PLMN at a time; verify IMS_DOMAIN names a
+    # supported PLMN (001-01 or 404-20) and that P-CSCF/S-CSCF actually resolve
+    # for THAT domain — catches a runner pointed at the wrong PLMN or a DNS zone
+    # still serving the other MCC/MNC.
+    if should_run_test 10; then
+        _TEST_NUM=10
+        log "TC-${_TEST_NUM}: Active PLMN = ${ACTIVE_PLMN_LABEL:-unknown} (IMS_DOMAIN=${IMS_DOMAIN})"
+        if [ -z "$ACTIVE_PLMN_LABEL" ]; then
+            fail "PLMN identification" "Could not parse MCC/MNC from IMS_DOMAIN='${IMS_DOMAIN}'"
+        elif ! plmn_is_supported "$ACTIVE_PLMN_LABEL"; then
+            fail "PLMN ${ACTIVE_PLMN_LABEL} not supported" "Expected one of: ${SUPPORTED_PLMNS}"
+        else
+            local pcscf_a scscf_a
+            pcscf_a=$(dig +short "pcscf.${IMS_DOMAIN}" @"${DNS_IP}" A 2>/dev/null | head -1 | tr -d '[:space:]')
+            scscf_a=$(dig +short "scscf.${IMS_DOMAIN}" @"${DNS_IP}" A 2>/dev/null | head -1 | tr -d '[:space:]')
+            if [ "$pcscf_a" = "$PCSCF_IP" ] && [ "$scscf_a" = "$SCSCF_IP" ]; then
+                pass "PLMN ${ACTIVE_PLMN_LABEL}: DNS zone consistent (pcscf=${pcscf_a}, scscf=${scscf_a})"
+            else
+                fail "PLMN ${ACTIVE_PLMN_LABEL}: DNS zone mismatch for ${IMS_DOMAIN}" \
+                     "pcscf expected ${PCSCF_IP} got '${pcscf_a}'; scscf expected ${SCSCF_IP} got '${scscf_a}' — is the DNS serving this PLMN?"
+            fi
+        fi
+    fi
+
+    # TC-11: Optimus (MTK) sec-agree REGISTER must remain on Gm IPsec
+    if should_run_test 11; then
+        _TEST_NUM=11
+        log "TC-${_TEST_NUM}: Optimus/MTK sec-agree REGISTER — must not be rejected with 420"
+        assert_register_not_rejected \
+            "/opt/test/scenarios/optimus_secagree_register.xml" 9340 \
+            "Optimus sec-agree REGISTER" 420
+    fi
+
+    # TC-12: Samsung sec-agree REGISTER must NOT be rejected (401 challenge)
+    if should_run_test 12; then
+        _TEST_NUM=12
+        log "TC-${_TEST_NUM}: Samsung sec-agree REGISTER — MTK 420 gate must NOT catch a non-MTK UA (not 420)"
+        assert_register_not_rejected \
+            "/opt/test/scenarios/samsung_secagree_register.xml" 9341 \
+            "Samsung sec-agree REGISTER" 420
+    fi
+
+    # TC-13: VoLTE INVITE as an Optimus/MTK UA on the active PLMN
+    if should_run_test 13; then
+        _TEST_NUM=13
+        log "TC-${_TEST_NUM}: VoLTE INVITE as Optimus/MTK UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (non-5xx)"
+        assert_profiled_invite_non5xx "optimus" "-" \
+            "/opt/test/scenarios/phone_profiled_volte_invite.xml" "9876541000" 9350 \
+            "VoLTE INVITE (Optimus/MTK UA, PLMN ${ACTIVE_PLMN_LABEL:-active})"
+    fi
+
+    # TC-14: VoLTE INVITE as a Samsung UA on the active PLMN
+    if should_run_test 14; then
+        _TEST_NUM=14
+        log "TC-${_TEST_NUM}: VoLTE INVITE as Samsung UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (non-5xx)"
+        assert_profiled_invite_non5xx "samsung" "-" \
+            "/opt/test/scenarios/phone_profiled_volte_invite.xml" "9876541000" 9351 \
+            "VoLTE INVITE (Samsung UA, PLMN ${ACTIVE_PLMN_LABEL:-active})"
+    fi
+
+    # TC-15: source/deployment guard for the real inter-NIB failure found in
+    # hardware captures: lookup() must not send a bare sip:IP:port R-URI.
+    # Optimus uses a userless Contact and expects the dialled MSISDN restored;
+    # replacing it with the REGISTER IMSI caused the handset not to respond.
+    if should_run_test 15; then
+        _TEST_NUM=15
+        log "TC-${_TEST_NUM}: Inter-NIB terminating Request-URI identity preservation guards"
+        local scscf_identity_cfg pcscf_100rel_suppression pcscf_rx_anchor pcscf_reinvite_anchor pcscf_active_sdp pcscf_ue_pools pcscf_bad_to_rewrite pcscf_bad_impu_rewrite
+        scscf_identity_cfg=$(docker exec scscf sh -c \
+            "grep -n 'term_called_user\\|INTER_NIB_MT.*Restored called user' /mnt/scscf/kamailio_scscf.cfg 2>/dev/null || grep -n 'term_called_user\\|INTER_NIB_MT.*Restored called user' /etc/kamailio/kamailio_scscf.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_100rel_suppression=$(docker exec pcscf sh -c \
+            "grep -n 'OPTIMUS_MT_100REL\\|inter_nib_supported.*100rel' /mnt/pcscf/route/mt.cfg 2>/dev/null || grep -n 'OPTIMUS_MT_100REL\\|inter_nib_supported.*100rel' /etc/kamailio/route/mt.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_rx_anchor=$(docker exec pcscf sh -c \
+            "grep -n 'INTER_NIB_RX_ANCHOR' /mnt/pcscf/route/mt.cfg 2>/dev/null || grep -n 'INTER_NIB_RX_ANCHOR' /etc/kamailio/route/mt.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_reinvite_anchor=$(docker exec pcscf sh -c \
+            "grep -n 'INTER_NIB_REINVITE_RX_ANCHOR' /mnt/pcscf/route/rtp.cfg 2>/dev/null || grep -n 'INTER_NIB_REINVITE_RX_ANCHOR' /etc/kamailio/route/rtp.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_active_sdp=$(docker exec pcscf sh -c \
+            "grep -n 'active_connection_scan\|active_sdp_ip' /mnt/pcscf/route/rtp.cfg 2>/dev/null || grep -n 'active_connection_scan\|active_sdp_ip' /etc/kamailio/route/rtp.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_ue_pools=$(docker exec pcscf sh -c \
+            "grep -n '10.*(46|48)' /mnt/pcscf/route/rtp.cfg 2>/dev/null || grep -n '10.*(46|48)' /etc/kamailio/route/rtp.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_bad_to_rewrite=$(docker exec pcscf sh -c \
+            "grep -n 'inter_nib_normalized_to\\|INTER_NIB_TO\\|uac_replace_to' /mnt/pcscf/route/mt.cfg /mnt/pcscf/kamailio_pcscf.cfg 2>/dev/null || grep -n 'inter_nib_normalized_to\\|INTER_NIB_TO\\|uac_replace_to' /etc/kamailio/route/mt.cfg /etc/kamailio/kamailio_pcscf.cfg 2>/dev/null" 2>/dev/null || true)
+        pcscf_bad_impu_rewrite=$(docker exec pcscf sh -c \
+            "grep -n 'ue_registered_impu\\|REGISTERED_IMPU\\|INTER_NIB_MT.*registered IMPU' /mnt/pcscf/route/mt.cfg /mnt/pcscf/route/register.cfg /mnt/pcscf/kamailio_pcscf.cfg 2>/dev/null || grep -n 'ue_registered_impu\\|REGISTERED_IMPU\\|INTER_NIB_MT.*registered IMPU' /etc/kamailio/route/mt.cfg /etc/kamailio/route/register.cfg /etc/kamailio/kamailio_pcscf.cfg 2>/dev/null" 2>/dev/null || true)
+        if echo "$scscf_identity_cfg" | grep -q 'term_called_user' &&
+           echo "$pcscf_100rel_suppression" | grep -q 'OPTIMUS_MT_100REL' &&
+           echo "$pcscf_rx_anchor" | grep -q 'INTER_NIB_RX_ANCHOR' &&
+           echo "$pcscf_reinvite_anchor" | grep -q 'INTER_NIB_REINVITE_RX_ANCHOR' &&
+           echo "$pcscf_active_sdp" | grep -q 'active_connection_scan' &&
+           echo "$pcscf_ue_pools" | grep -q '(46|48)' &&
+           [ -z "$pcscf_bad_to_rewrite" ] &&
+           [ -z "$pcscf_bad_impu_rewrite" ]; then
+            pass "Inter-NIB identity/100rel and initial/re-INVITE Rx-anchor guards use active media addresses for both deployed UE pools"
+        else
+            fail "Inter-NIB MT called-MSISDN preservation guard failed" \
+                "S-CSCF='${scscf_identity_cfg:-missing}'; 100rel suppression='${pcscf_100rel_suppression:-missing}'; initial Rx anchor='${pcscf_rx_anchor:-missing}'; re-INVITE Rx anchor='${pcscf_reinvite_anchor:-missing}'; active SDP selector='${pcscf_active_sdp:-missing}'; UE pools='${pcscf_ue_pools:-missing}'; dialog To rewrite='${pcscf_bad_to_rewrite:-none}'; incompatible P-CSCF IMSI rewrite='${pcscf_bad_impu_rewrite:-none}'"
         fi
     fi
 

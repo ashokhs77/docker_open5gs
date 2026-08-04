@@ -25,6 +25,8 @@
 #   TC-13: Inter-NIB conference INVITE (join conference room at external IMS domain, non-5xx required)
 #   TC-14: 24-member SINGLE audio (VoLTE) conference — join + sustained hold past rtp-timeout
 #   TC-15: 8-member  SINGLE video (ViLTE) conference — join + sustained hold past rtp-timeout
+#   TC-16: Conf-factory INVITE as Optimus/MTK UA on active PLMN (non-5xx)
+#   TC-17: Conf-factory INVITE as Samsung UA on active PLMN (non-5xx)
 #
 # TC-14/15 model the "N UEs in ONE conference" requirement (not concurrent separate calls):
 # they launch N SIPp legs into a single FreeSWITCH room, measure ACTUAL membership via
@@ -650,6 +652,37 @@ print('OK' if ok_reg else 'FAIL')
             else
                 pass "Single video conference STABLE at ${CONF_SOAK_JOINED}/${n_vid} members (all ${CONF_SOAK_RETAINED} retained ${hold_v}s, zero mid-hold drops). Join count is the in-suite ceiling (SIPp legs co-located with FS on one host); video-conference path is stable — full ${n_vid} reached with real-UE / multi-host load"
             fi
+        fi
+    fi
+
+    # ── Phone-type conference interop (Optimus/MTK vs Samsung) on active PLMN ──
+    # Single-INVITE probe: a conf-factory dial-in from each phone type must be
+    # accepted/routed toward the FreeSWITCH conference AS without a 5xx. Guarded
+    # on conf-factory DNS (set by the DNS probe near the top of this feature).
+
+    # Optimus/MTK UA conf-factory INVITE
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: Conf-factory INVITE as Optimus/MTK UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (non-5xx)"
+        if ! $conf_factory_dns_available; then
+            skip "Conf-factory INVITE (Optimus/MTK UA)" "conf-factory DNS not configured"
+        else
+            assert_profiled_invite_non5xx "optimus" "-" \
+                "/opt/test/scenarios/phone_profiled_conf_invite.xml" "mmtel" 7220 \
+                "Conf-factory INVITE (Optimus/MTK UA, PLMN ${ACTIVE_PLMN_LABEL:-active})"
+        fi
+    fi
+
+    # Samsung UA conf-factory INVITE
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: Conf-factory INVITE as Samsung UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (non-5xx)"
+        if ! $conf_factory_dns_available; then
+            skip "Conf-factory INVITE (Samsung UA)" "conf-factory DNS not configured"
+        else
+            assert_profiled_invite_non5xx "samsung" "-" \
+                "/opt/test/scenarios/phone_profiled_conf_invite.xml" "mmtel" 7221 \
+                "Conf-factory INVITE (Samsung UA, PLMN ${ACTIVE_PLMN_LABEL:-active})"
         fi
     fi
 

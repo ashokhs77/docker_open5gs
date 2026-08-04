@@ -61,6 +61,78 @@ sed -i 's|OP_MNC|'$MNC'|g' ./config.yaml
 sed -i 's|MYSQL_IP|'$MYSQL_IP'|g' ./config.yaml
 sed -i 's|INSTALL_PREFIX|'$INSTALL_PREFIX'|g' ./config.yaml
 
+# --- Hardware-adaptive concurrency sizing -------------------------------------
+# Keep the default worker counts proportional to the CPUs visible inside the
+# container. A 4-CPU Lexboard therefore runs 4 HSS workers, 4 Diameter readers
+# and an 8+4 SQL pool; a larger server scales up automatically. Explicit
+# environment overrides remain available for controlled load testing.
+_CPU_COUNT="$(nproc 2>/dev/null || echo 2)"
+if ! [[ "$_CPU_COUNT" =~ ^[0-9]+$ ]] || [ "$_CPU_COUNT" -lt 1 ]; then
+	_CPU_COUNT=2
+fi
+
+if [ -n "${PYHSS_HSS_SERVICE_WORKERS:-}" ]; then
+	HSS_SERVICE_WORKERS="$PYHSS_HSS_SERVICE_WORKERS"
+else
+	HSS_SERVICE_WORKERS="$_CPU_COUNT"
+	[ "$HSS_SERVICE_WORKERS" -lt 4 ] && HSS_SERVICE_WORKERS=4
+	[ "$HSS_SERVICE_WORKERS" -gt 32 ] && HSS_SERVICE_WORKERS=32
+fi
+if ! [[ "$HSS_SERVICE_WORKERS" =~ ^[0-9]+$ ]] || [ "$HSS_SERVICE_WORKERS" -lt 1 ]; then
+	echo "Invalid PYHSS_HSS_SERVICE_WORKERS='$HSS_SERVICE_WORKERS'; using CPU-derived default"
+	HSS_SERVICE_WORKERS="$_CPU_COUNT"
+	[ "$HSS_SERVICE_WORKERS" -lt 4 ] && HSS_SERVICE_WORKERS=4
+	[ "$HSS_SERVICE_WORKERS" -gt 32 ] && HSS_SERVICE_WORKERS=32
+fi
+
+if [ -n "${PYHSS_DIAMETER_SERVICE_WORKERS:-}" ]; then
+	DIAMETER_SERVICE_WORKERS="$PYHSS_DIAMETER_SERVICE_WORKERS"
+else
+	DIAMETER_SERVICE_WORKERS="$_CPU_COUNT"
+	[ "$DIAMETER_SERVICE_WORKERS" -lt 4 ] && DIAMETER_SERVICE_WORKERS=4
+	[ "$DIAMETER_SERVICE_WORKERS" -gt 32 ] && DIAMETER_SERVICE_WORKERS=32
+fi
+if ! [[ "$DIAMETER_SERVICE_WORKERS" =~ ^[0-9]+$ ]] || [ "$DIAMETER_SERVICE_WORKERS" -lt 1 ]; then
+	echo "Invalid PYHSS_DIAMETER_SERVICE_WORKERS='$DIAMETER_SERVICE_WORKERS'; using CPU-derived default"
+	DIAMETER_SERVICE_WORKERS="$_CPU_COUNT"
+	[ "$DIAMETER_SERVICE_WORKERS" -lt 4 ] && DIAMETER_SERVICE_WORKERS=4
+	[ "$DIAMETER_SERVICE_WORKERS" -gt 32 ] && DIAMETER_SERVICE_WORKERS=32
+fi
+
+if [ -n "${PYHSS_SQLALCHEMY_POOL_SIZE:-}" ]; then
+	SQLALCHEMY_POOL_SIZE="$PYHSS_SQLALCHEMY_POOL_SIZE"
+else
+	SQLALCHEMY_POOL_SIZE=$((_CPU_COUNT * 2))
+	[ "$SQLALCHEMY_POOL_SIZE" -lt 8 ] && SQLALCHEMY_POOL_SIZE=8
+	[ "$SQLALCHEMY_POOL_SIZE" -gt 64 ] && SQLALCHEMY_POOL_SIZE=64
+fi
+if ! [[ "$SQLALCHEMY_POOL_SIZE" =~ ^[0-9]+$ ]] || [ "$SQLALCHEMY_POOL_SIZE" -lt 1 ]; then
+	echo "Invalid PYHSS_SQLALCHEMY_POOL_SIZE='$SQLALCHEMY_POOL_SIZE'; using CPU-derived default"
+	SQLALCHEMY_POOL_SIZE=$((_CPU_COUNT * 2))
+	[ "$SQLALCHEMY_POOL_SIZE" -lt 8 ] && SQLALCHEMY_POOL_SIZE=8
+	[ "$SQLALCHEMY_POOL_SIZE" -gt 64 ] && SQLALCHEMY_POOL_SIZE=64
+fi
+
+if [ -n "${PYHSS_SQLALCHEMY_MAX_OVERFLOW:-}" ]; then
+	SQLALCHEMY_MAX_OVERFLOW="$PYHSS_SQLALCHEMY_MAX_OVERFLOW"
+else
+	SQLALCHEMY_MAX_OVERFLOW="$_CPU_COUNT"
+	[ "$SQLALCHEMY_MAX_OVERFLOW" -lt 4 ] && SQLALCHEMY_MAX_OVERFLOW=4
+	[ "$SQLALCHEMY_MAX_OVERFLOW" -gt 32 ] && SQLALCHEMY_MAX_OVERFLOW=32
+fi
+if ! [[ "$SQLALCHEMY_MAX_OVERFLOW" =~ ^[0-9]+$ ]]; then
+	echo "Invalid PYHSS_SQLALCHEMY_MAX_OVERFLOW='$SQLALCHEMY_MAX_OVERFLOW'; using CPU-derived default"
+	SQLALCHEMY_MAX_OVERFLOW="$_CPU_COUNT"
+	[ "$SQLALCHEMY_MAX_OVERFLOW" -lt 4 ] && SQLALCHEMY_MAX_OVERFLOW=4
+	[ "$SQLALCHEMY_MAX_OVERFLOW" -gt 32 ] && SQLALCHEMY_MAX_OVERFLOW=32
+fi
+
+echo "PyHSS concurrency sized for ${_CPU_COUNT} CPU(s): hss_service_workers=${HSS_SERVICE_WORKERS} diameter_service_workers=${DIAMETER_SERVICE_WORKERS} sqlalchemy_pool_size=${SQLALCHEMY_POOL_SIZE} sqlalchemy_max_overflow=${SQLALCHEMY_MAX_OVERFLOW}"
+
+sed -i 's|DIAMETER_SERVICE_WORKERS|'$DIAMETER_SERVICE_WORKERS'|g' ./config.yaml
+sed -i 's|SQLALCHEMY_POOL_SIZE|'$SQLALCHEMY_POOL_SIZE'|g' ./config.yaml
+sed -i 's|SQLALCHEMY_MAX_OVERFLOW|'$SQLALCHEMY_MAX_OVERFLOW'|g' ./config.yaml
+
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -74,19 +146,6 @@ python3 diameterService.py &
 # Sleep is needed to let db be populated in a non-overlapping fashion
 sleep 5
 
-if [ -n "${PYHSS_HSS_SERVICE_WORKERS:-}" ]; then
-	HSS_SERVICE_WORKERS="$PYHSS_HSS_SERVICE_WORKERS"
-else
-	_CPU_COUNT="$(nproc 2>/dev/null || echo 2)"
-	HSS_SERVICE_WORKERS=$((_CPU_COUNT * 4))
-	[ "$HSS_SERVICE_WORKERS" -lt 4 ] && HSS_SERVICE_WORKERS=4
-	[ "$HSS_SERVICE_WORKERS" -gt 32 ] && HSS_SERVICE_WORKERS=32
-fi
-
-if ! [[ "$HSS_SERVICE_WORKERS" =~ ^[0-9]+$ ]] || [ "$HSS_SERVICE_WORKERS" -lt 1 ]; then
-	HSS_SERVICE_WORKERS=4
-fi
-
 echo "Starting ${HSS_SERVICE_WORKERS} PyHSS hssService worker(s)"
 
 worker_id=1
@@ -96,4 +155,3 @@ while [ "$worker_id" -lt "$HSS_SERVICE_WORKERS" ]; do
 done
 
 exec python3 hssService.py $@
-

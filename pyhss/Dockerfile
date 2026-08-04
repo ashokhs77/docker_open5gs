@@ -48,8 +48,17 @@ RUN apt-get update && \
 RUN git init /src/pyhss && \
     cd /src/pyhss && \
     git remote add origin https://github.com/ashokhs77/pyhss && \
-    git fetch --depth 1 origin 85dd98a50e494c516e49da4c4a40323094fad307 && \
-    git checkout FETCH_HEAD
+    git fetch --depth 1 origin 1d210fb7f0f3ab136da4d159798c599a7213c61c && \
+    git checkout FETCH_HEAD && \
+    python3 -m py_compile lib/database.py && \
+    python3 -m py_compile lib/diameter.py && \
+    python3 -m py_compile tests/test_serving_apn_lifecycle.py && \
+    python3 -m py_compile tests/test_rx_identity_resolution.py && \
+    grep -Fq '[SERVING_APN_STATE] action=UPSERT' lib/database.py && \
+    grep -Fq '[SERVING_APN_STATE] action=STALE_DELETE_IGNORED' lib/database.py && \
+    grep -Fq '[RX_IDENTITY] source=framed-ip' lib/diameter.py && \
+    grep -Fq '[RX_IDENTITY] source=subscription-id' lib/diameter.py && \
+    grep -Fq 'validation=preloaded' lib/diameter.py
 
 RUN sed -E 's/^mysqlclient([<>= ].*)?$/mysqlclient==2.1.1/' \
         /src/pyhss/requirements.txt > /tmp/pyhss-requirements.txt && \
@@ -57,6 +66,11 @@ RUN sed -E 's/^mysqlclient([<>= ].*)?$/mysqlclient==2.1.1/' \
         -r /tmp/pyhss-requirements.txt \
         pandas \
         openpyxl && \
+    cd /src/pyhss && \
+    PYTHONPATH=/opt/pyhss-python:/src/pyhss/lib \
+        python3 -c "import runpy; runpy.run_path('tests/test_serving_apn_lifecycle.py')['test_serving_apn_atomic_lifecycle']()" && \
+    PYTHONPATH=/opt/pyhss-python:/src/pyhss/lib \
+        python3 -c "import runpy; runpy.run_path('tests/test_rx_identity_resolution.py')['test_rx_identity_resolution']()" && \
     find /opt/pyhss-python -type d -name '__pycache__' -prune -exec rm -rf {} +
 
 FROM ubuntu:jammy
@@ -92,4 +106,3 @@ RUN mkdir -p /pyhss/log/
 WORKDIR /pyhss
 
 CMD ["/mnt/pyhss/pyhss_init.sh"]
-

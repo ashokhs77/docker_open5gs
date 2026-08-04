@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Phone-type test — Samsung sec-agree REGISTER.
+
+  A Samsung UE registers requesting IPsec (Require: sec-agree + Security-Client:
+  ipsec-3gpp), exactly like the Optimus scenario, but with a Samsung User-Agent.
+  The P-CSCF REJECT_SEC_AGREE gate is MTK-only, so Samsung must NOT be rejected
+  with 420 — the P-CSCF proceeds down the normal registration path and issues a
+  401 Unauthorized auth challenge (keeping Samsung on its working IPsec path).
+
+  A 420 here means the sec-agree gate is no longer correctly scoped to MTK and
+  is wrongly forcing Samsung off IPsec (the regression the gating fix prevents).
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf samsung_secagree_register.xml \
+         -i [LOCAL_IP] -p 9341 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Samsung sec-agree REGISTER (expect 401, not 420)">
+
+  <send retrans="500">
+    <![CDATA[
+      REGISTER sip:IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:001019876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:001019876540700@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 REGISTER
+      Contact: <sip:001019876540700@[local_ip]:[local_port]>
+      User-Agent: SAMSUNG-SM-G991B-Android13 Samsung IMS-client/6.0
+      Require: sec-agree
+      Proxy-Require: sec-agree
+      Security-Client: ipsec-3gpp; alg=hmac-sha-1-96; ealg=null; spi-c=1234; spi-s=5678; port-c=[local_port]; port-s=[local_port]
+      Supported: path
+      Expires: 3600
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Samsung must be challenged (401), NOT rejected with 420. -->
+  <!-- Samsung REGISTER is forwarded: P-CSCF sends 100 Trying, then the S-CSCF
+       401 challenge comes back. Tolerate the provisional 100. -->
+  <recv response="100" optional="true"/>
+  <recv response="401" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

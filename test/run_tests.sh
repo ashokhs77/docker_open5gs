@@ -328,6 +328,12 @@ Feature: VoLTE (--feature volte)
   TC-7: RTPEngine health check
   TC-8: Intra-NIB VoLTE INVITE (9876540001 -> 9876541000, same IMS domain)
   TC-9: Inter-NIB VoLTE INVITE (callee at external.example, non-5xx required)
+  TC-10: Active PLMN identification and DNS consistency
+  TC-11: Optimus/MTK sec-agree remains on Gm IPsec (not 420)
+  TC-12: Samsung sec-agree remains on Gm IPsec (not 420)
+  TC-13: VoLTE INVITE as Optimus/MTK UA
+  TC-14: VoLTE INVITE as Samsung UA
+  TC-15: Inter-NIB terminating Request-URI identity preservation deployed
 
 Feature: ViLTE (--feature vilte)
   TC-1:  P-CSCF sdpops module loaded

@@ -332,7 +332,6 @@ services:
   pyhss:
     environment: 
       - TZ=Asia/Kolkata
-      - PYHSS_HSS_SERVICE_WORKERS=${PYHSS_HSS_SERVICE_WORKERS:-32}
     build: ./pyhss
     image: docker_pyhss
     container_name: pyhss

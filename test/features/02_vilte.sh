@@ -19,6 +19,8 @@
 # TC-9:  Intra-NIB ViLTE INVITE (audio+video SDP, caller and callee in same IMS domain)
 # TC-10: Inter-NIB ViLTE INVITE (audio+video SDP, callee in external domain, non-5xx required)
 # TC-11: Mid-call media type switch (audio->video and video->audio re-INVITE)
+# TC-12: ViLTE INVITE as Optimus/MTK UA on active PLMN (video SDP, non-5xx)
+# TC-13: ViLTE INVITE as Samsung UA on active PLMN (video SDP, non-5xx)
 
 set +e  # Don't exit on errors - we handle them ourselves
 
@@ -488,6 +490,26 @@ print(json.dumps(out))
                 fail "ViLTE media type switch could not start because caller/callee registration failed" "A=${reg_a}, B=${reg_b}, error=${call_err}, caller_error=${err_a}, callee_error=${err_b}"
             fi
         fi
+    fi
+
+    # ── Phone-type video interop (Optimus/MTK vs Samsung) on active PLMN ──
+
+    # TC-12: ViLTE (audio+video) INVITE as an Optimus/MTK UA
+    if should_run_test 12; then
+        _TEST_NUM=12
+        log "TC-${_TEST_NUM}: ViLTE INVITE as Optimus/MTK UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (video SDP, non-5xx)"
+        assert_profiled_invite_non5xx "optimus" "-" \
+            "/opt/test/scenarios/phone_profiled_vilte_invite.xml" "9876541000" 9360 \
+            "ViLTE INVITE (Optimus/MTK UA, PLMN ${ACTIVE_PLMN_LABEL:-active})"
+    fi
+
+    # TC-13: ViLTE (audio+video) INVITE as a Samsung UA
+    if should_run_test 13; then
+        _TEST_NUM=13
+        log "TC-${_TEST_NUM}: ViLTE INVITE as Samsung UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (video SDP, non-5xx)"
+        assert_profiled_invite_non5xx "samsung" "-" \
+            "/opt/test/scenarios/phone_profiled_vilte_invite.xml" "9876541000" 9361 \
+            "ViLTE INVITE (Samsung UA, PLMN ${ACTIVE_PLMN_LABEL:-active})"
     fi
 
     end_feature

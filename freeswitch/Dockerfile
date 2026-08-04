@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopus-dev \
     libpcre2-dev \
     libpcre3-dev \
+    libpng-dev \
     libpq-dev \
     libsndfile1-dev \
     libspeexdsp-dev \
@@ -32,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtool \
     libtool-bin \
     libvo-amrwbenc-dev \
+    libvpx-dev \
     libxml2-dev \
     pkg-config \
     unixodbc-dev \
@@ -74,6 +76,15 @@ RUN git clone --depth 1 https://github.com/freeswitch/spandsp.git /usr/local/src
     make install && \
     ldconfig
 
+# G.729 / G.729A / G.729B (Annex A+B) — open-source Belledonne bcg729 library.
+# Provides real G.729 encode+decode (patents expired) for mobile<->SIP transcode.
+RUN git clone --depth 1 https://github.com/BelledonneCommunications/bcg729.git /usr/local/src/bcg729 && \
+    cd /usr/local/src/bcg729 && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DENABLE_SHARED=YES -DENABLE_STATIC=NO . && \
+    make -j"$(nproc)" && \
+    make install && \
+    ldconfig
+
 RUN git init /usr/local/src/freeswitch && \
     cd /usr/local/src/freeswitch && \
     git remote add origin https://github.com/Shreyas-B-Aradhya/freeswitch && \
@@ -89,10 +100,23 @@ RUN cp /usr/include/opencore-amrnb/interf_enc.h src/mod/codecs/mod_amr/ && \
 
 # Install prompts/MOH at build time; runtime containers run without internet.
 RUN ./bootstrap.sh && \
-    sed -i 's/#\(codecs\/mod_amrwb\)/\1/g' modules.conf && \
+    sed -i -E 's|#(codecs/mod_amr(wb)?)|\1|g' modules.conf && \
     ./configure && \
     make -j"$(nproc)" && \
     make install sounds-install moh-install && \
+    ldconfig
+
+# FreeSWITCH G.729 codec module — compiled directly against the installed FS
+# headers and bcg729, then registered for autoload. Kept as its own (cheap) layer
+# after the expensive FS build so an iteration here doesn't rebuild FreeSWITCH.
+RUN git clone --depth 1 https://github.com/xadhoom/mod_bcg729.git /usr/local/src/mod_bcg729 && \
+    cd /usr/local/src/mod_bcg729 && \
+    gcc -shared -fPIC -std=gnu99 -o mod_bcg729.so mod_bcg729.c \
+        -I/usr/local/freeswitch/include/freeswitch -I/usr/local/include \
+        -L/usr/local/lib -lbcg729 && \
+    install -m 0755 mod_bcg729.so /usr/local/freeswitch/mod/ && \
+    sed -i 's#</modules>#  <load module="mod_amr"/>\n  <load module="mod_bcg729"/>\n</modules>#' \
+        /usr/local/freeswitch/conf/autoload_configs/modules.conf.xml && \
     ldconfig
 
 RUN rm -rf \
@@ -124,6 +148,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopus0 \
     libpcre2-8-0 \
     libpcre3 \
+    libpng16-16 \
     libpq5 \
     libsndfile1 \
     libspeexdsp1 \
@@ -132,6 +157,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libtiff5 \
     libuuid1 \
     libvo-amrwbenc0 \
+    libvpx7 \
     libxml2 \
     unixodbc \
     zlib1g && \

@@ -43,9 +43,10 @@ hss:
   # full window available before the UE gives up and re-tries.
   diameter_request_timeout: 15
 
-  # Diameter socket-reader workers. The HSS response path is handled by
-  # hssService workers started in pyhss_init.sh; keep both sides sized together.
-  diameter_service_workers: 32
+  # Diameter socket-reader workers. pyhss_init.sh defaults this to one worker
+  # per visible CPU (clamped 4..32), keeping a 4-core field box conservative
+  # while allowing a larger server to scale automatically.
+  diameter_service_workers: DIAMETER_SERVICE_WORKERS
 
   # Keep burst Diameter requests distributed across hssService workers instead
   # of allowing one worker to drain the whole Redis queue serially.
@@ -127,8 +128,11 @@ logging:
   log_to_terminal: True
   sqlalchemy_sql_echo: False
   sqlalchemy_pool_recycle: 300
-  sqlalchemy_pool_size: 100
-  sqlalchemy_max_overflow: 50
+  # Substituted by pyhss_init.sh: pool=CPU*2 (clamped 8..64) and
+  # overflow=CPU (clamped 4..32). Optional environment overrides are intended
+  # only for controlled load testing.
+  sqlalchemy_pool_size: SQLALCHEMY_POOL_SIZE
+  sqlalchemy_max_overflow: SQLALCHEMY_MAX_OVERFLOW
 
 ## Database Parameters
 database:

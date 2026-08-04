@@ -8,6 +8,7 @@ echo "PCSCF_IP is: $PCSCF_IP"
 cp    /mnt/freeswitch/acl.conf.xml /usr/local/freeswitch/conf/autoload_configs
 cp    /mnt/freeswitch/switch.conf.xml /usr/local/freeswitch/conf/autoload_configs
 cp    /mnt/freeswitch/conference.conf.xml /usr/local/freeswitch/conf/autoload_configs
+cp    /mnt/freeswitch/av.conf.xml /usr/local/freeswitch/conf/autoload_configs
 cp    /mnt/freeswitch/vars.xml /usr/local/freeswitch/conf
 cp    /mnt/freeswitch/external.xml /usr/local/freeswitch/conf/sip_profiles
 cp    /mnt/freeswitch/internal.xml /usr/local/freeswitch/conf/sip_profiles
@@ -32,5 +33,4 @@ if [ "${IMS_LOG_ENABLED:-true}" = "true" ]; then
 fi
 
 /usr/local/freeswitch/bin/freeswitch -nonat
-
 

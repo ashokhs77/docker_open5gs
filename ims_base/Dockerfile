@@ -90,6 +90,7 @@ RUN apt-get update && \
 		libnghttp2-14 \
 		libpcre2-8-0 \
 		libpcre3 \
+		netbase \
 		libradcli4 \
 		libsctp1 \
 		libssl3 \

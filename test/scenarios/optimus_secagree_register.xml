@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<!--
+  Phone-type test — Optimus (MTK "VoLTE/WFC UA") sec-agree REGISTER.
+
+  An Optimus/MTK UE registers requesting IPsec (Require: sec-agree +
+  Security-Client: ipsec-3gpp). The P-CSCF must keep this handset on the normal
+  Gm IPsec path and issue the authentication challenge. A 420 response would
+  wrongly force plain SIP; hardware A/B traces proved that did not fix the
+  inter-NIB 480 failure.
+
+  IMS_DOMAIN is substituted at runtime by run_sipp_templated().
+
+  Run with:
+    sipp [PCSCF_IP]:5060 -sf optimus_secagree_register.xml \
+         -i [LOCAL_IP] -p 9340 -m 1 -l 1 -timeout 15
+-->
+<scenario name="Optimus MTK sec-agree REGISTER (expect 401, not 420)">
+
+  <send retrans="500">
+    <![CDATA[
+      REGISTER sip:IMS_DOMAIN SIP/2.0
+      Via: SIP/2.0/UDP [local_ip]:[local_port];branch=[branch]
+      Max-Forwards: 70
+      From: <sip:001019876540700@IMS_DOMAIN>;tag=[call_number]
+      To: <sip:001019876540700@IMS_DOMAIN>
+      Call-ID: [call_id]
+      CSeq: 1 REGISTER
+      Contact: <sip:001019876540700@[local_ip]:[local_port]>
+      User-Agent: VoLTE/WFC UA
+      Require: sec-agree
+      Proxy-Require: sec-agree
+      Security-Client: ipsec-3gpp; alg=hmac-sha-1-96; ealg=null; spi-c=1234; spi-s=5678; port-c=[local_port]; port-s=[local_port]
+      Supported: path
+      Expires: 3600
+      Content-Length: 0
+
+    ]]>
+  </send>
+
+  <!-- Optimus must remain on Gm IPsec: challenge with 401, never reject with 420. -->
+  <recv response="100" optional="true"/>
+  <recv response="401" timeout="10000"/>
+
+  <ResponseTimeRepartition value="10, 20, 50, 100, 200, 500, 1000"/>
+  <CallLengthRepartition value="10, 50, 100, 500, 1000"/>
+</scenario>

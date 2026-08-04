@@ -14,8 +14,11 @@
 #   Cat 7: Subscriber Lifecycle     (TC-28 to TC-33)  ~10s
 #   Cat 8: EPC Mobility & Security  (TC-37 to TC-43)  ~60s
 #   Cat 9: NAS Ciphering & PDN Type (TC-44 to TC-49)  ~60s
+#   Cat 10: PLMN & Phone-Type Interop (TC-50 to TC-54) ~10s
+#          (001-01/404-20 DNS consistency; Optimus/MTK vs Samsung sec-agree
+#           gating 420/401; VoLTE INVITE per phone type — Optimus interop guard)
 #
-# Total: 49 test cases, ~210 seconds
+# Total: 54 test cases, ~220 seconds
 
 set +e
 
@@ -1802,8 +1805,13 @@ print(json.dumps({'attach': ok_attach, 'tau': ok_tau, 'guti': guti}))
                 # requests.  The probe leaves auc.sqn at a small value (≤ 32*attempts);
                 # since SQN_UE = 0x000000FFFFFF (16 M) >> any probe increment, the
                 # subsequent AUTS resync is guaranteed to be accepted.
-                log "TC-${_TEST_NUM}: PyHSS HTTP ready — probing S6a end-to-end..."
-                mme_epc_probe "TC-38 S6a probe" 5 5
+                # PyHSS HTTP (apiService) recovers well before the MME<->PyHSS S6a
+                # Diameter peer re-establishes: after a PyHSS restart the MME only
+                # reconnects on its freeDiameter Tc timer (~30s; HA/Resilience TC-4
+                # measures ~22s "still settling"). A 5x5s=25s probe gives up right
+                # as S6a is coming back, so budget past the real reconnect window.
+                log "TC-${_TEST_NUM}: PyHSS HTTP ready — probing S6a end-to-end (waiting out the Diameter Tc reconnect)..."
+                mme_epc_probe "TC-38 S6a probe" 12 5
                 # Brief cool-down: the probe's final detach triggers a PDN session
                 # deletion at SMF/UPF which the MME processes asynchronously.  Without
                 # this pause, TC-38's fresh Attach Request arrives while the MME is
@@ -2449,6 +2457,66 @@ print(json.dumps({'attach': ok_attach, 'idle': idle, 'paged': paged,
                 skip "IPv6 MT paging skipped — no IPv6 UE address pool in SMF (PDN type 2 not supported)" "no-ipv6-pool"
             fi
         fi
+    fi
+
+    # ─── Cat 10: PLMN & Phone-Type Interop ──────────────────────────────────
+    # Regression guard for the Optimus (MTK) VoLTE interop work across PLMNs
+    # 001-01 / 404-20. The core runs as one PLMN at a time; these validate the
+    # ACTIVE PLMN is consistent and that the MTK-vs-Samsung P-CSCF gating holds.
+
+    # PLMN identity & DNS zone consistency for the active deployment
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: Active PLMN ${ACTIVE_PLMN_LABEL:-unknown} — DNS zone consistency (IMS_DOMAIN=${IMS_DOMAIN})"
+        if [ -z "$ACTIVE_PLMN_LABEL" ] || ! plmn_is_supported "$ACTIVE_PLMN_LABEL"; then
+            fail "PLMN identity" "IMS_DOMAIN='${IMS_DOMAIN}' did not resolve to a supported PLMN (${SUPPORTED_PLMNS})"
+        else
+            local rp_a rs_a
+            rp_a=$(dig +short "pcscf.${IMS_DOMAIN}" @"${DNS_IP}" A 2>/dev/null | head -1 | tr -d '[:space:]')
+            rs_a=$(dig +short "scscf.${IMS_DOMAIN}" @"${DNS_IP}" A 2>/dev/null | head -1 | tr -d '[:space:]')
+            if [ "$rp_a" = "$PCSCF_IP" ] && [ "$rs_a" = "$SCSCF_IP" ]; then
+                pass "PLMN ${ACTIVE_PLMN_LABEL}: DNS zone consistent (pcscf=${rp_a}, scscf=${rs_a})"
+            else
+                fail "PLMN ${ACTIVE_PLMN_LABEL}: DNS zone mismatch" \
+                     "pcscf exp ${PCSCF_IP} got '${rp_a}'; scscf exp ${SCSCF_IP} got '${rs_a}'"
+            fi
+        fi
+    fi
+
+    # Optimus/MTK sec-agree REGISTER remains on the Gm IPsec path
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: Optimus/MTK sec-agree REGISTER must not be rejected with 420"
+        assert_register_not_rejected \
+            "/opt/test/scenarios/optimus_secagree_register.xml" 9342 \
+            "Optimus sec-agree REGISTER" 420
+    fi
+
+    # Samsung sec-agree REGISTER → 401 (NOT 420; IPsec path preserved)
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: Samsung sec-agree REGISTER → MTK 420 gate must NOT catch a non-MTK UA (not 420)"
+        assert_register_not_rejected \
+            "/opt/test/scenarios/samsung_secagree_register.xml" 9343 \
+            "Samsung sec-agree REGISTER" 420
+    fi
+
+    # VoLTE INVITE as Optimus/MTK UA on the active PLMN (non-5xx)
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: VoLTE INVITE as Optimus/MTK UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (non-5xx)"
+        assert_profiled_invite_non5xx "optimus" "-" \
+            "/opt/test/scenarios/phone_profiled_volte_invite.xml" "9876541000" 9352 \
+            "VoLTE INVITE (Optimus/MTK UA)"
+    fi
+
+    # VoLTE INVITE as Samsung UA on the active PLMN (non-5xx)
+    _TEST_NUM=$((_TEST_NUM + 1))
+    if should_run_test $_TEST_NUM; then
+        log "TC-${_TEST_NUM}: VoLTE INVITE as Samsung UA on PLMN ${ACTIVE_PLMN_LABEL:-active} (non-5xx)"
+        assert_profiled_invite_non5xx "samsung" "-" \
+            "/opt/test/scenarios/phone_profiled_volte_invite.xml" "9876541000" 9353 \
+            "VoLTE INVITE (Samsung UA)"
     fi
 
     # Clean up

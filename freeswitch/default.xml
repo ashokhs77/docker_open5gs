@@ -394,6 +394,36 @@
       </condition>
     </extension>
 
+    <!--
+      Optimus/MTK conference admission.
+
+      The handset identifies itself exactly as "VoLTE/WFC UA".  Unlike the
+      Samsung path, it withheld both uplink audio and video when FreeSWITCH
+      returned an immediate 200 OK: the QCI-1/QCI-2 bearer responses completed
+      about 1.6 s after that answer, and FreeSWITCH then cleared the leg at its
+      30 s RTP timeout with SIP cause 804 (MEDIA_TIMEOUT).
+
+      Send 183 with SDP first so Rx/Gx can establish the media bearers, wait
+      two seconds for the observed bearer setup interval, then answer.  The
+      Keep a 90 s audio timeout as a guard against genuinely dead conference
+      legs.  Optimus can leave audio active while its video uplink is absent
+      after a rapid redial; a video timeout must not clear that usable audio
+      leg.  These channel variables are expressed in milliseconds, and this
+      does not change the normal Samsung conference extension below.
+    -->
+    <extension name="optimus_conferences_1xxx">
+      <condition field="${sip_user_agent}" expression="^VoLTE/WFC UA$"/>
+      <condition field="destination_number" expression="^(1\d{3})(?:;.*)?$">
+        <action application="set" data="media_timeout_audio=90000"/>
+        <action application="set" data="media_timeout_video=0"/>
+        <action application="pre_answer"/>
+        <action application="sleep" data="2000"/>
+        <action application="answer"/>
+        <action application="log" data="NOTICE [OPTIMUS_VIDEO_CONF] room=$1 profile=video-mcu-stereo-480-optimus canvas=480x640 layouts=1x1,2x1-zoom,1x1+2x1,2x2 fps=15 gop=30 keyint_min=15"/>
+        <action application="conference" data="$1@video-mcu-stereo-480-optimus"/>
+      </condition>
+    </extension>
+
     <extension name="cdquality_conferences_720">
       <condition field="destination_number" expression="^(1\d{3})(?:;.*)?$">
 	<action application="answer"/>
