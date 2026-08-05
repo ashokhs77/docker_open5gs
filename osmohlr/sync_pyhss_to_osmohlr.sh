@@ -10,7 +10,19 @@
 # Usage: ./sync_pyhss_to_osmohlr.sh
 # =============================================================================
 
-PYHSS_API="http://172.22.1.18:8080"
+if [ -z "${PYHSS_IP:-}" ]; then
+    SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+    ENV_FILE="${SCRIPT_DIR}/../.env"
+    if [ -f "$ENV_FILE" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        . "$ENV_FILE"
+        set +a
+    fi
+fi
+
+: "${PYHSS_IP:?PYHSS_IP must be supplied or defined in .env}"
+PYHSS_API="http://${PYHSS_IP}:8080"
 OSMOHLR_CONTAINER="osmohlr"
 DB_PATH="/mnt/osmohlr/hlr.db"
 PAGE_SIZE=200

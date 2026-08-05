@@ -85,6 +85,10 @@ sed -i 's|EPC_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_pcscf/kamailio_pcscf.cfg
 sed -i 's|MYSQL_IP|'$MYSQL_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
+sed -i 's|FREESWITCH_IP|'$FREESWITCH_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
+sed -i 's|IBCF_IP|'$IBCF_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
+sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mo.cfg
+sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/register.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
 
 sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /etc/kamailio_pcscf/pcscf.xml
@@ -123,4 +127,3 @@ exec kamailio -f /etc/kamailio_pcscf/kamailio_pcscf.cfg -P /kamailio_pcscf.pid -
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
