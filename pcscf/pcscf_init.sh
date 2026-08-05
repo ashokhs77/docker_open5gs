@@ -88,6 +88,7 @@ sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|FREESWITCH_IP|'$FREESWITCH_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
 sed -i 's|IBCF_IP|'$IBCF_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
 sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mo.cfg
+sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mt.cfg
 sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/register.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
 
