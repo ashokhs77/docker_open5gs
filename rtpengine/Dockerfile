@@ -120,12 +120,19 @@ RUN apt-get update && \
         iptables \
         iputils-ping \
         kmod \
+        libavcodec-extra \
+        libopencore-amrnb0 \
+        libopencore-amrwb0 \
+        libopus0 \
+        libvo-amrwbenc0 \
         net-tools \
         netcat-openbsd \
         nftables \
         procps \
         $debs && \
     ldconfig && \
+    rtpengine --codecs | grep -q 'AMR' && \
+    rtpengine --codecs | grep -q 'AMR-WB' && \
     rm -rf /tmp/rtpengine-debs /var/lib/apt/lists/* /root/.cache /tmp/*
 
 CMD ["/mnt/rtpengine/rtpengine_init.sh"]
