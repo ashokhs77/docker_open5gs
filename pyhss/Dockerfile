@@ -48,7 +48,7 @@ RUN apt-get update && \
 RUN git init /src/pyhss && \
     cd /src/pyhss && \
     git remote add origin https://github.com/ashokhs77/pyhss && \
-    git fetch --depth 1 origin 1d210fb7f0f3ab136da4d159798c599a7213c61c && \
+    git fetch --depth 1 origin 682e6adf135a2647d2c84a4924593aa8910c79d5 && \
     git checkout FETCH_HEAD && \
     python3 -m py_compile lib/database.py && \
     python3 -m py_compile lib/diameter.py && \
