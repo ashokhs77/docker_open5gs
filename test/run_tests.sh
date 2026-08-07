@@ -802,15 +802,18 @@ wait_for_services() {
     log "Waiting for DNS at ${DNS_IP}:53 (timeout: 30s)..."
     elapsed=0
     while [ "$elapsed" -lt 30 ]; do
-        if dig +short ${IMS_DOMAIN} @${DNS_IP} > /dev/null 2>&1; then
-            log "DNS is available"
+        dns_answer=$(dig +short +time=2 +tries=1 \
+            "pcscf.${IMS_DOMAIN}" @"${DNS_IP}" A 2>/dev/null |
+            head -1 | tr -d '[:space:]')
+        if [ -n "$dns_answer" ]; then
+            log "DNS is available (pcscf.${IMS_DOMAIN} -> ${dns_answer})"
             break
         fi
         sleep 2
         elapsed=$((elapsed + 2))
     done
     if [ "$elapsed" -ge 30 ]; then
-        log "WARNING: DNS not reachable after 30s"
+        log "WARNING: DNS did not resolve pcscf.${IMS_DOMAIN} after 30s"
     fi
 
     log "Service readiness check complete"

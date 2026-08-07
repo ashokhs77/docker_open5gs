@@ -59,8 +59,8 @@ export IMS_DOMAIN
 # ------------------------------------------------------------
 # The core is deployed as ONE PLMN at a time (the DNS server serves a single
 # ims.mncXXX.mccYYY zone derived from MNC/MCC at container init). The suite is
-# therefore PLMN-parameterised via IMS_DOMAIN: deploy the core as 001-01 or
-# 404-20 and point the runner at the matching IMS_DOMAIN. These helpers let the
+# therefore derives IMS_DOMAIN from the deployment MCC/MNC (an explicit
+# IMS_DOMAIN remains an optional override). These helpers let the
 # tests self-identify the active PLMN, verify it is one we support, and drive
 # per-phone-type behaviour (Optimus/MTK vs Samsung) that the P-CSCF gates on the
 # User-Agent (e.g. the sec-agree -> 420 fallback is MTK-only).
