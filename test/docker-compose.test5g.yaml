@@ -60,7 +60,6 @@ x-sipp-test-5g-env: &sipp-test-5g-env
   MYSQL_IP: ${MYSQL_IP:-172.22.1.17}
   DNS_IP: ${DNS_IP:-172.22.1.15}
   NIB: ${NIB:-1}
-  IMS_DOMAIN: ${IMS_DOMAIN:-ims.mnc001.mcc001.3gppnetwork.org}
   MCC: ${MCC:-001}
   MNC: ${MNC:-01}
   MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-MySQL_PaSsW0rD}

@@ -71,7 +71,19 @@ if [ -z "${LOCAL_IP:-}" ]; then
     LOCAL_IP="172.22.1.200"
     LOCAL_IP_SOURCE="default"
 fi
-IMS_DOMAIN="${IMS_DOMAIN:-ims.mnc001.mcc001.3gppnetwork.org}"
+# Keep the shared IMS realm aligned with the DNS container, which derives its
+# zone from the deployment's existing MCC/MNC values.
+MCC="${MCC:-001}"
+MNC="${MNC:-01}"
+if [ -z "${IMS_DOMAIN:-}" ]; then
+    if [ ${#MNC} -eq 3 ]; then
+        _IMS_MNC="$MNC"
+    else
+        _IMS_MNC="0${MNC}"
+    fi
+    IMS_DOMAIN="ims.mnc${_IMS_MNC}.mcc${MCC}.3gppnetwork.org"
+fi
+export IMS_DOMAIN
 
 # Docker host IP: where host-networked services (MMSC runs network_mode: host) and
 # host-published ports are reachable from the test runner. Prefer an explicit value;

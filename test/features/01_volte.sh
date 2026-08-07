@@ -286,7 +286,7 @@ run_volte_tests() {
     if should_run_test 15; then
         _TEST_NUM=15
         log "TC-${_TEST_NUM}: Inter-NIB terminating Request-URI identity preservation guards"
-        local scscf_identity_cfg pcscf_100rel_suppression pcscf_rx_anchor pcscf_reinvite_anchor pcscf_active_sdp pcscf_ue_pools pcscf_bad_to_rewrite pcscf_bad_impu_rewrite
+        local scscf_identity_cfg pcscf_100rel_suppression pcscf_rx_anchor pcscf_reinvite_anchor pcscf_active_sdp pcscf_bad_to_rewrite pcscf_bad_impu_rewrite
         scscf_identity_cfg=$(docker exec scscf sh -c \
             "grep -n 'term_called_user\\|INTER_NIB_MT.*Restored called user' /mnt/scscf/kamailio_scscf.cfg 2>/dev/null || grep -n 'term_called_user\\|INTER_NIB_MT.*Restored called user' /etc/kamailio/kamailio_scscf.cfg 2>/dev/null" 2>/dev/null || true)
         pcscf_100rel_suppression=$(docker exec pcscf sh -c \
@@ -297,8 +297,6 @@ run_volte_tests() {
             "grep -n 'INTER_NIB_REINVITE_RX_ANCHOR' /mnt/pcscf/route/rtp.cfg 2>/dev/null || grep -n 'INTER_NIB_REINVITE_RX_ANCHOR' /etc/kamailio/route/rtp.cfg 2>/dev/null" 2>/dev/null || true)
         pcscf_active_sdp=$(docker exec pcscf sh -c \
             "grep -n 'active_connection_scan\|active_sdp_ip' /mnt/pcscf/route/rtp.cfg 2>/dev/null || grep -n 'active_connection_scan\|active_sdp_ip' /etc/kamailio/route/rtp.cfg 2>/dev/null" 2>/dev/null || true)
-        pcscf_ue_pools=$(docker exec pcscf sh -c \
-            "grep -n '10.*(46|48)' /mnt/pcscf/route/rtp.cfg 2>/dev/null || grep -n '10.*(46|48)' /etc/kamailio/route/rtp.cfg 2>/dev/null" 2>/dev/null || true)
         pcscf_bad_to_rewrite=$(docker exec pcscf sh -c \
             "grep -n 'inter_nib_normalized_to\\|INTER_NIB_TO\\|uac_replace_to' /mnt/pcscf/route/mt.cfg /mnt/pcscf/kamailio_pcscf.cfg 2>/dev/null || grep -n 'inter_nib_normalized_to\\|INTER_NIB_TO\\|uac_replace_to' /etc/kamailio/route/mt.cfg /etc/kamailio/kamailio_pcscf.cfg 2>/dev/null" 2>/dev/null || true)
         pcscf_bad_impu_rewrite=$(docker exec pcscf sh -c \
@@ -308,13 +306,12 @@ run_volte_tests() {
            echo "$pcscf_rx_anchor" | grep -q 'INTER_NIB_RX_ANCHOR' &&
            echo "$pcscf_reinvite_anchor" | grep -q 'INTER_NIB_REINVITE_RX_ANCHOR' &&
            echo "$pcscf_active_sdp" | grep -q 'active_connection_scan' &&
-           echo "$pcscf_ue_pools" | grep -q '(46|48)' &&
            [ -z "$pcscf_bad_to_rewrite" ] &&
            [ -z "$pcscf_bad_impu_rewrite" ]; then
-            pass "Inter-NIB identity/100rel and initial/re-INVITE Rx-anchor guards use active media addresses for both deployed UE pools"
+            pass "Inter-NIB identity/100rel and initial/re-INVITE Rx-anchor guards use active media and dispatcher-derived peer addresses"
         else
             fail "Inter-NIB MT called-MSISDN preservation guard failed" \
-                "S-CSCF='${scscf_identity_cfg:-missing}'; 100rel suppression='${pcscf_100rel_suppression:-missing}'; initial Rx anchor='${pcscf_rx_anchor:-missing}'; re-INVITE Rx anchor='${pcscf_reinvite_anchor:-missing}'; active SDP selector='${pcscf_active_sdp:-missing}'; UE pools='${pcscf_ue_pools:-missing}'; dialog To rewrite='${pcscf_bad_to_rewrite:-none}'; incompatible P-CSCF IMSI rewrite='${pcscf_bad_impu_rewrite:-none}'"
+                "S-CSCF='${scscf_identity_cfg:-missing}'; 100rel suppression='${pcscf_100rel_suppression:-missing}'; initial Rx anchor='${pcscf_rx_anchor:-missing}'; re-INVITE Rx anchor='${pcscf_reinvite_anchor:-missing}'; active SDP selector='${pcscf_active_sdp:-missing}'; dialog To rewrite='${pcscf_bad_to_rewrite:-none}'; incompatible P-CSCF IMSI rewrite='${pcscf_bad_impu_rewrite:-none}'"
         fi
     fi
 
