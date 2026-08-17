@@ -114,14 +114,30 @@ COPY --from=builder /usr/local/src/kamailio/misc/examples/ims/icscf /usr/local/s
 RUN mkdir -p /var/log/kamailio/ && ldconfig
 
 COPY kamailio-cdr /etc/logrotate.d/kamailio-cdr
+COPY kamailio-conf-cdr /etc/logrotate.d/kamailio-conf-cdr
 
 COPY cdr_logger.sh /usr/local/bin/cdr-logger.sh
+COPY conf_cdr_logger.sh /usr/local/bin/conf-cdr-logger.sh
 
-RUN chmod +x /usr/local/bin/cdr-logger.sh
+RUN chmod +x /usr/local/bin/cdr-logger.sh /usr/local/bin/conf-cdr-logger.sh
 
 COPY license/libLwsLicenseCheck.so /usr/lib64/
 RUN chmod 755 /usr/lib64/libLwsLicenseCheck.so
 
 COPY kamailio_init.sh /
+
+# Self-heal line endings on every shell script baked into the image. The source
+# tree is frequently edited/synced from Windows (CRLF); a CRLF shebang makes the
+# kernel look for "/bin/bash\r" and the container dies at startup with
+# "exec /kamailio_init.sh: no such file or directory". Strip CRs at BUILD time so
+# the image is correct no matter how the sources were checked out or synced.
+RUN sed -i 's/\r$//' \
+        /kamailio_init.sh \
+        /usr/local/bin/cdr-logger.sh \
+        /usr/local/bin/conf-cdr-logger.sh \
+        /etc/logrotate.d/kamailio-cdr \
+        /etc/logrotate.d/kamailio-conf-cdr \
+    && chmod +x /kamailio_init.sh /usr/local/bin/cdr-logger.sh /usr/local/bin/conf-cdr-logger.sh
+
 CMD ["/kamailio_init.sh"]
 

@@ -108,6 +108,15 @@ for p in "base/Dockerfile" "ims_base/Dockerfile" "$COMPOSE_FILE"; do
     }
 done
 
+EPC_VERSION="$(sed -n 's/^EPC_VERSION=//p' .env | tail -n 1 | tr -d '\r')"
+case "$EPC_VERSION" in
+    ''|*[!0-9A-Za-z._-]*)
+        echo "ERROR: .env must define a safe, non-empty EPC_VERSION." >&2
+        exit 1
+        ;;
+esac
+CORE_IMAGE="docker_open5gs:${EPC_VERSION}"
+
 # Trap to report which step failed
 CURRENT_STEP="startup"
 trap 'rc=$?; [ $rc -ne 0 ] && printf "\n\033[1;31m#### BUILD FAILED at: %s (exit %d) ####\033[0m\n" "$CURRENT_STEP" "$rc"' EXIT
@@ -127,11 +136,13 @@ fi
 # ─── Step 1/3: docker_open5gs (base) ─────────────────────────────────────────
 # Used by: AMF SMF UPF NRF SCP AUSF UDM UDR PCF BSF NSSF (all 5G NFs share this image)
 # This is the longest build step (~10–20 min depending on host).
-CURRENT_STEP="1/3 docker_open5gs (base/)"
-banner "[1/3] docker_open5gs — 5GC core binary ${BUILD_FLAGS:+(no-cache)}"
+CURRENT_STEP="1/3 ${CORE_IMAGE} (base/)"
+banner "[1/3] ${CORE_IMAGE} — 5GC core binary ${BUILD_FLAGS:+(no-cache)}"
 t0=$(date +%s)
-docker build $BUILD_FLAGS -t docker_open5gs ./base
-printf "   docker_open5gs built in %ss\n" "$(secs_since "$t0")"
+docker build $BUILD_FLAGS --build-arg "EPC_VERSION=${EPC_VERSION}" \
+    -t "$CORE_IMAGE" ./base
+docker tag "$CORE_IMAGE" docker_open5gs
+printf "   %s built in %ss\n" "$CORE_IMAGE" "$(secs_since "$t0")"
 
 # ─── Step 2/3: docker_kamailio (ims_base) ────────────────────────────────────
 # Used by: P-CSCF I-CSCF S-CSCF SMSC (IMS for VoNR)

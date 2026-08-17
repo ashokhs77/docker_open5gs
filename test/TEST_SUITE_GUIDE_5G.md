@@ -235,16 +235,18 @@ sudo docker rm -f $(sudo docker ps -aq --filter name=load) 2>/dev/null
 | `pdu_profile_5g` | PDU Profile (5G) | 10 | DNN / IPv4v6 session profiles | **yes** |
 | `vonr` | VoNR | 11 | VoNR call control over the shared IMS | some |
 | `sms_5g` | SMS over 5GS | 13 | SMS over NAS / IMS, intra/inter‑NIB | some |
-| `cdr_5g` | CDR (5G) | 7 | 5G CDR generation | some |
+| `cdr_5g` | CDR (5G) | 13 | S-CSCF VoNR CDR + **conference CDR** (FreeSWITCH‑sourced `conf_cdr.csv`: 9‑col schema, retention, and a room dial through the shared IMS) | some |
 | `slicing` | Network Slicing | 7 | S‑NSSAI selection (NSSF) | no |
 | `security_5g` | Security (5G) | 14 | 5G auth/input‑validation/DoS posture | some |
 | `mms_5g` | MMS over 5GS | 18 | MMS/Kannel/Mbuni over 5GS | some |
-| `conference_5g` | Conference (5G VoNR) | 15 | VoNR conference incl. 24‑audio/8‑video soak | some |
+| `conference_5g` | Conference (5G VoNR) | 15 | **complete‑path** VoNR conferences (INVITE `1NNR` → P‑CSCF → FreeSWITCH) incl. single **24‑audio / 8‑video** — each asserts **exactly N `LEG` rows** in `conf_cdr.csv`; plus conf‑factory + PCF N5 QoS + inter‑NIB | some |
 | `advanced_sip_5g` | Advanced SIP (5G VoNR) | 5 | RTP echo/DTMF/REFER/emergency over VoNR | some |
 | `stress_5g` | Stress Test (5G VoNR) | 9 | VoNR stability under stress | **yes** |
 | `video_vonr` | Video VoNR (ViNR) | 10 | video VoNR (ViNR) call flows | some |
 | `qos_flow_5g` | QoS Flow (5G) | 10 | 5QI flow lifecycle (5QI‑9/5/1/2) | **yes** |
-| `load_5g` | Load Test (5G) | 20 | registration/PDU/burst ramps (128/256/512 sharded) + VoNR INVITE | **yes** |
+| `load_5g` | Load Test (5G) | 20 | registration/PDU ramps (128/256 UERANSIM) + **native NGAP 512 burst (TC-11)** + VoNR INVITE | **yes** |
+
+> **Conference CDR (FreeSWITCH‑sourced, shared IMS).** Conference dials (`1NNR`) route P‑CSCF → FreeSWITCH on the *shared* IMS. The conference bridge's **FreeSWITCH** (the host NIB) is the **single source** of the CDR — a `mod_lua` script (`conference_cdr.lua`) writes `/cdr-logs/conf_cdr.csv` via the shared `conf-cdr-logger.sh` (same mechanism as 4G; the old P‑CSCF `confcdr` htable path is disabled). Because the bridge sees every member — local or relayed from another NIB — the host‑NIB CDR is complete for inter‑NIB conferences. The 5G `conference_5g` and `cdr_5g` features use the **complete path**: conference calls dial `1NNR` **through the P‑CSCF** (INVITE `sip:<room>@IMS_DOMAIN`, accepted via the `WITH_SIPP_TEST` bypass) and assert **exactly N `LEG` rows** per bridge in `conf_cdr.csv`. (5G access = NGAP/PDU is validated by the registration/PDU features; the conference tests exercise the shared IMS path + CDR.)
 
 ### TRL8 conformance/assurance add‑on (12) — `--bundle trl8` + `--bundle all` (opt‑in)
 
@@ -299,10 +301,32 @@ Written inside the runner at `/opt/test/reports/` (bind‑mounted to the host).
 - `charging_5g`, `scas_itsar_5g`, conformance features — partial: no OCS/CHF, some open5gs paths debug‑only, REAL_HW‑gated evidence.
 - Data‑plane line‑rate sweeps — REAL_HW‑gated (UERANSIM userspace GTP‑U cannot sustain bulk throughput).
 
-**The load feature is UERANSIM‑bound and variable.** The 5G core sustains 512 UEs + PDU at
-~0% CPU; the ceiling is the **UERANSIM per‑process limit** on the host, not the core. So ~1–2
-of the 20 `load_5g` TCs can flip PASS/FAIL run‑to‑run (a *different* TC each time — e.g. TC‑9
-registration at N=128, or TC‑12/16 PDU capacity showing 0 after a prior 256‑UE ramp left
+### Load-test methodology — division of labor
+
+Each layer is exercised with the tool that most faithfully represents it. No emulator
+has a radio, so RF/PHY/mobility is real HW only.
+
+| Use the… | For… | Because… |
+|---|---|---|
+| **Native NGAP sim** (`ue_sim/ue5g_simulator.py`) | control‑plane **capacity & scale** — registration storms (TC‑11), future paging/mobility storms | many virtual UEs over ONE gNB SCTP association — how industrial signalling load testers actually work; ceiling is the 5G core, not the tool |
+| **UERANSIM** | **functional per‑UE** end‑to‑end — real PDU session, data‑plane reachability, jitter (TC‑9/10/12/16, TC‑5/6) | it has a real (userspace) GTP‑U datapath; costs one OS process per UE, so it scales to a handful, not hundreds |
+| **Real HW** | radio, line‑rate throughput, real mobility (TC‑19/20 + data‑plane line rate) | neither emulator has a radio or a hardware datapath; these are **REAL_HW‑gated** |
+
+**The registration burst ceiling is now measured natively, not via UERANSIM.** TC‑11 uses the
+in‑suite native NGAP UE simulator (`ue_sim/ue5g_simulator.py`) — many *virtual* UEs multiplexed
+over ONE gNB SCTP association — so it reaches the full **512/512 concurrent registrations**
+(live‑validated 2026‑08‑13, ~6 s over one association) and the ceiling found is the **5G core
+(AMF/AUSF)**, not the load generator. This replaces the old UERANSIM sharded burst whose ~43‑UE
+ceiling was purely the per‑UE process cost. Run TC‑11 standalone:
+```bash
+sudo docker compose -f docker-compose.test5g.yaml run --rm --no-deps --entrypoint python3 \
+  sipp-test-5g -m ue_sim.ue5g_simulator --amf-ip 172.22.1.10 --num-ues 512 --timeout 30 --json
+```
+
+**The other load ramps (TC‑9/10/12/16) remain UERANSIM‑bound and variable.** The 5G core
+sustains 512 UEs + PDU at ~0% CPU; those ramps' ceiling is the **UERANSIM per‑process limit** on
+the host, not the core. So ~1–2 of the 20 `load_5g` TCs can flip PASS/FAIL run‑to‑run (a
+*different* TC each time — e.g. TC‑12/16 PDU capacity showing 0 after a prior 256‑UE ramp left
 SMF/UPF session state). To confirm one is transient, flush state and re‑run the feature:
 ```bash
 sudo docker restart smf upf ; sleep 10 ; sudo docker restart nr-gnb nr-ue ; sleep 12

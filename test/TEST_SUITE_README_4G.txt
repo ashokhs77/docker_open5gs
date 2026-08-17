@@ -106,9 +106,9 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
  5. FEATURE KEYS  (use with --feature <key>)
 --------------------------------------------------------------------------------
   CORE (22) — default run / --bundle tec / --bundle all
-    epc_health(20)  hss_auc(10)  pdn_session(9)  pyhss_api(10)  attach_churn(9)
+    epc_health(20)  hss_auc(12)  pdn_session(9)  pyhss_api(10)  attach_churn(9)
     regression(49)  volte(9)  vilte(11)  eir(6)  sms(13)  inter_nib(8)
-    conference(15)  fxo_fxs(5)  mobile_ip(6)  cdr(7)  load(14)  mms(18)
+    conference(17)  fxo_fxs(5)  mobile_ip(6)  cdr(13)  load(14)  mms(18)
     stress(8)  bearer_qos(10)  tec(13)  advanced_sip(5)  security(10)
 
   TRL8 (12) — opt-in: --feature <key> / --bundle trl8 / --bundle all

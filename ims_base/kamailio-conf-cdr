@@ -1,0 +1,26 @@
+/var/log/kamailio/conf_cdr.csv {
+    daily
+    rotate 30
+    compress
+    dateext
+    missingok
+    notifempty
+    create 0644 root root
+    firstaction
+        # Safety net for idle periods: keep only the last 7 days of records.
+        # conf-cdr-logger.sh already trims on every write and keeps the newest
+        # record on top; this preserves the header and newest-first ordering.
+        tmpfile=$(mktemp)
+        head -n 1 /var/log/kamailio/conf_cdr.csv > $tmpfile
+        awk -F',' -v d="$(date -d '7 days ago' +%s)" '
+            NR==1 { next }                 # header already copied
+            {
+                cmd = "date -d \"" $6 "\" +%s 2>/dev/null"
+                t = ""
+                if ((cmd | getline t) > 0) { close(cmd) }
+                if (t == "" || t + 0 >= d) print $0
+            }
+        ' /var/log/kamailio/conf_cdr.csv >> $tmpfile
+        mv $tmpfile /var/log/kamailio/conf_cdr.csv
+    endscript
+}

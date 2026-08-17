@@ -36,7 +36,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ADD mysql_init.sh /mysql_init.sh
-RUN chmod 755 /mysql_init.sh
+# Self-heal line endings: a CRLF shebang (from Windows-edited/synced sources) makes
+# the kernel look for "/bin/bash\r" and the container dies at startup with
+# "exec /mysql_init.sh: no such file or directory". Strip CRs at build time.
+RUN sed -i 's/\r$//' /mysql_init.sh && chmod 755 /mysql_init.sh
 
 RUN /etc/init.d/mysql stop
 

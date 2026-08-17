@@ -1497,25 +1497,54 @@ class NASHandler:
         causes = {
             0x02: "IMSI unknown in HSS",
             0x03: "Illegal UE",
+            0x04: "IMSI unknown in VLR",
+            0x05: "IMEI not accepted",
             0x06: "Illegal ME",
             0x07: "EPS services not allowed",
-            0x08: "EPS and non-EPS services not allowed",
-            0x09: "UE identity cannot be derived",
+            0x08: "EPS services and non-EPS services not allowed",
+            0x09: "UE identity cannot be derived by the network",
             0x0A: "Implicitly detached",
             0x0B: "PLMN not allowed",
             0x0C: "Tracking area not allowed",
-            0x0D: "Roaming not allowed in this TA",
-            0x0F: "No suitable cells in TA",
+            0x0D: "Roaming not allowed in this tracking area",
+            0x0E: "EPS services not allowed in this PLMN",
+            0x0F: "No suitable cells in tracking area",
+            0x10: "MSC temporarily not reachable",
             0x11: "Network failure",
+            0x12: "CS domain not available",
+            0x13: "ESM failure",
             0x14: "MAC failure",
-            0x15: "Synch failure",
+            0x15: "Synchronization failure",
             0x16: "Congestion",
+            0x17: "UE security capabilities mismatch",
+            0x18: "Security mode rejected unspecified",
             0x19: "Not authorized for this CSG",
-            0x23: "Requested service option not authorized",
-            0x27: "CS domain temporarily not available",
+            0x1A: "Non-EPS authentication unacceptable",
+            0x1F: "Redirection to 5GCN required",
+            0x23: "Requested service option not authorized in this PLMN",
+            0x24: "IAB-node operation not authorized",
+            0x27: "CS service temporarily not available",
+            0x28: "No EPS bearer context activated",
+            0x2A: "Severe network failure",
+            0x4E: "PLMN not allowed to operate at the present UE location",
+            0x50: (
+                "Disaster roaming for the determined PLMN with disaster "
+                "condition not allowed"
+            ),
+            0x53: (
+                "Procedure cannot be completed due to unavailable feeder "
+                "link while MME is operating in S&F mode"
+            ),
             0x5F: "Semantically incorrect message",
+            0x60: "Invalid mandatory information",
+            0x61: "Message type non-existent or not implemented",
+            0x62: "Message type not compatible with protocol state",
+            0x63: "Information element non-existent or not implemented",
+            0x64: "Conditional IE error",
+            0x65: "Message not compatible with protocol state",
+            0x6F: "Protocol error unspecified",
         }
-        return causes.get(cause, f"Unknown cause ({cause})")
+        return causes.get(cause, "Unassigned or future EMM cause")
 
 
 if __name__ == "__main__":

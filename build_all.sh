@@ -85,6 +85,15 @@ for p in "base/Dockerfile" "ims_base/Dockerfile" "$COMPOSE_FILE"; do
                      echo "Place build_all.sh in the docker_open5gs repo root."; exit 1; }
 done
 
+EPC_VERSION="$(sed -n 's/^EPC_VERSION=//p' .env | tail -n 1 | tr -d '\r')"
+case "$EPC_VERSION" in
+    ''|*[!0-9A-Za-z._-]*)
+        echo "ERROR: .env must define a safe, non-empty EPC_VERSION." >&2
+        exit 1
+        ;;
+esac
+CORE_IMAGE="docker_open5gs:${EPC_VERSION}"
+
 # --- Report which step failed, if any ---
 CURRENT_STEP="startup"
 trap 'rc=$?; [ $rc -ne 0 ] && printf "\n\033[1;31m#### BUILD FAILED at: %s (exit %d) ####\033[0m\n" "$CURRENT_STEP" "$rc"' EXIT
@@ -99,11 +108,15 @@ if [ "$DO_PRUNE" -eq 1 ]; then
     docker system prune -af
 fi
 
-CURRENT_STEP="1/3 docker_open5gs (base/)"
-banner "[1/3] docker_open5gs  - EPC/5GC core ${BUILD_FLAGS:+(no-cache)}"
+CURRENT_STEP="1/3 ${CORE_IMAGE} (base/)"
+banner "[1/3] ${CORE_IMAGE} - EPC/5GC core ${BUILD_FLAGS:+(no-cache)}"
 t0=$(date +%s)
-docker build $BUILD_FLAGS -t docker_open5gs ./base
-printf "   docker_open5gs built in %ss\n" "$(secs_since "$t0")"
+docker build $BUILD_FLAGS --build-arg "EPC_VERSION=${EPC_VERSION}" \
+    -t "$CORE_IMAGE" ./base
+# Keep the legacy tag for developer tools while deployments use the immutable
+# revision tag below.
+docker tag "$CORE_IMAGE" docker_open5gs
+printf "   %s built in %ss\n" "$CORE_IMAGE" "$(secs_since "$t0")"
 
 CURRENT_STEP="2/3 docker_kamailio (ims_base/)"
 banner "[2/3] docker_kamailio - IMS CSCFs + SMSC ${BUILD_FLAGS:+(no-cache)}"

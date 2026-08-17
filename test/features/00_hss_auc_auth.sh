@@ -14,6 +14,8 @@
 #   TC-8:  Unknown IMSI is rejected
 #   TC-9:  SQN re-synchronisation via AUTS succeeds
 #   TC-10: IMS AKA registration succeeds for the auth subscriber
+#   TC-11: Attach + Authentication Rejects are audited newest-first at runtime
+#   TC-12: Deployed revision, all reject paths, and all EMM causes are verified
 
 set +e
 
@@ -24,13 +26,19 @@ esac
 _hss_base=$(( (10#${_hss_seed} + $$) % 1000000 ))
 _hss_base_b=$(( (_hss_base + 1) % 1000000 ))
 _hss_base_unknown=$(( (_hss_base + 500000) % 1000000 ))
+_hss_base_unknown_b=$(( (_hss_base_unknown + 1) % 1000000 ))
+_hss_base_unknown_c=$(( (_hss_base_unknown + 2) % 1000000 ))
 
 HSS_AUTH_MSISDN="${HSS_AUTH_MSISDN:-9876$(printf '%06d' "$_hss_base")}"
 HSS_AUTH_NEG_MSISDN="${HSS_AUTH_NEG_MSISDN:-9876$(printf '%06d' "$_hss_base_b")}"
 HSS_AUTH_UNKNOWN_MSISDN="${HSS_AUTH_UNKNOWN_MSISDN:-9877$(printf '%06d' "$_hss_base_unknown")}"
+HSS_AUTH_UNKNOWN_MSISDN_B="${HSS_AUTH_UNKNOWN_MSISDN_B:-9877$(printf '%06d' "$_hss_base_unknown_b")}"
+HSS_AUTH_UNKNOWN_MSISDN_C="${HSS_AUTH_UNKNOWN_MSISDN_C:-9877$(printf '%06d' "$_hss_base_unknown_c")}"
 HSS_AUTH_IMSI="${HSS_AUTH_IMSI:-00101${HSS_AUTH_MSISDN}}"
 HSS_AUTH_NEG_IMSI="${HSS_AUTH_NEG_IMSI:-00101${HSS_AUTH_NEG_MSISDN}}"
 HSS_AUTH_UNKNOWN_IMSI="${HSS_AUTH_UNKNOWN_IMSI:-00101${HSS_AUTH_UNKNOWN_MSISDN}}"
+HSS_AUTH_UNKNOWN_IMSI_B="${HSS_AUTH_UNKNOWN_IMSI_B:-00101${HSS_AUTH_UNKNOWN_MSISDN_B}}"
+HSS_AUTH_UNKNOWN_IMSI_C="${HSS_AUTH_UNKNOWN_IMSI_C:-00101${HSS_AUTH_UNKNOWN_MSISDN_C}}"
 HSS_AUTH_KI="${HSS_AUTH_KI:-1b1b1b1b2c2c2c2c3d3d3d3d4e4e4e4e}"
 HSS_AUTH_NEG_KI="${HSS_AUTH_NEG_KI:-5a5a5a5a6b6b6b6b7c7c7c7c8d8d8d8d}"
 HSS_AUTH_WRONG_KI="${HSS_AUTH_WRONG_KI:-ffffffffffffffffffffffffffffffff}"
@@ -171,7 +179,7 @@ _hss_prepare_auth_subscribers() {
 
 _hss_need_auth_subscribers() {
     local n
-    for n in 2 3 4 5 6 7 9 10; do
+    for n in 2 3 4 5 6 7 9 10 11; do
         if should_run_test "$n"; then
             return 0
         fi
@@ -184,11 +192,13 @@ _hss_run_attach_json() {
     local ki="$2"
     local msisdn="$3"
     local port_offset="$4"
+    local ue_capability_hex="${5:-}"
     HSS_SNIPPET_IMSI="$imsi" \
     HSS_SNIPPET_KI="$ki" \
     HSS_SNIPPET_OPC="$HSS_AUTH_OPC" \
     HSS_SNIPPET_MSISDN="$msisdn" \
     HSS_SNIPPET_PORT_OFFSET="$port_offset" \
+    HSS_SNIPPET_UE_CAPABILITY_HEX="$ue_capability_hex" \
     timeout 45 "$PYTHON_BIN" - 2>/dev/null <<'PY' || echo '{"attach": false, "error": "python attach runner failed"}'
 import json, os, sys
 sys.path.insert(0, '/opt/test')
@@ -201,12 +211,15 @@ from ue_sim.ue_simulator import UESimulator
 from ue_sim.config import Config
 import logging
 logging.disable(logging.WARNING)
+capability_hex = os.environ.get('HSS_SNIPPET_UE_CAPABILITY_HEX', '')
+ue_capability = bytes.fromhex(capability_hex) if capability_hex else None
 ue = UESimulator(
     imsi=os.environ['HSS_SNIPPET_IMSI'],
     ki=os.environ['HSS_SNIPPET_KI'],
     opc=os.environ['HSS_SNIPPET_OPC'],
     msisdn=os.environ.get('HSS_SNIPPET_MSISDN', ''),
     sip_local_port=Config.SIP_LOCAL_PORT_BASE + int(os.environ.get('HSS_SNIPPET_PORT_OFFSET', '60')),
+    ue_network_capability=ue_capability,
 )
 ok = ue.attach()
 out = {
@@ -525,6 +538,234 @@ PY
                 fail "IMS AKA registration failed after successful EPC attach" "${err:-no error}; result=${result}"
             else
                 fail "IMS AKA registration cannot start because EPC attach failed" "$result"
+            fi
+        fi
+    fi
+
+    # TC-11: Live UE simulator verifies MME mobility-reject auditing.
+    if should_run_test 11; then
+        _TEST_NUM=11
+        local audit_csv startup_header startup_evidence
+        local result_a result_b result_c result_auth
+        local att_a att_b att_c att_auth raw_csv_rows csv_rows
+        local header newest previous older oldest
+        local newest_date newest_time newest_imei newest_imsi newest_message
+        local newest_cause newest_reason previous_date previous_time
+        local previous_imei previous_imsi previous_message previous_cause
+        local previous_reason older_date older_time older_imei older_imsi
+        local older_message older_cause older_reason oldest_date oldest_time
+        local oldest_imei oldest_imsi oldest_message oldest_cause oldest_reason
+        local attempt
+
+        audit_csv=$(docker exec mme sh -c \
+            'printf "%s" "${MME_UNAUTHORIZED_ATTACH_CSV:-/open5gs/install/var/log/open5gs/unauthorized_attach_attempts.csv}"' \
+            2>/dev/null)
+        startup_header=$(docker exec mme sh -c \
+            "if [ -r '$audit_csv' ]; then head -n 1 '$audit_csv'; fi" \
+            2>/dev/null | tr -d '\r')
+        startup_evidence=$(docker logs mme 2>&1 | \
+            grep -F 'Mobility reject audit ready:' | tail -n 1)
+
+        if ! container_is_running "mme"; then
+            fail "Mobility Reject CSV audit cannot run" "MME container is not running"
+        elif ! _hss_ue_sim_import_ok; then
+            skip "Mobility Reject CSV audit" "Python UE simulator libraries not importable"
+        elif ! $HSS_AUTH_PREPARED; then
+            fail "Authentication Reject CSV audit cannot run" \
+                "${HSS_AUTH_PREP_DETAIL:-subscriber preparation failed}"
+        elif [ -z "$audit_csv" ]; then
+            fail "Mobility Reject CSV path is unavailable" \
+                "MME_UNAUTHORIZED_ATTACH_CSV is empty"
+        elif [ "$startup_header" != \
+                "date,time,imei,imsi,reject_message,reject_cause,reject_reason" ] ||
+             [ -z "$startup_evidence" ]; then
+            fail "MME did not initialize the mobility-reject audit" \
+                "path=${audit_csv}; header=${startup_header:-missing}; log=${startup_evidence:-missing}"
+        else
+            result_a=$(_hss_run_attach_json \
+                "$HSS_AUTH_UNKNOWN_IMSI" "$HSS_AUTH_WRONG_KI" \
+                "$HSS_AUTH_UNKNOWN_MSISDN" 67)
+            result_b=$(_hss_run_attach_json \
+                "$HSS_AUTH_UNKNOWN_IMSI_B" "$HSS_AUTH_WRONG_KI" \
+                "$HSS_AUTH_UNKNOWN_MSISDN_B" 68)
+            result_c=$(_hss_run_attach_json \
+                "$HSS_AUTH_UNKNOWN_IMSI_C" "$HSS_AUTH_WRONG_KI" \
+                "$HSS_AUTH_UNKNOWN_MSISDN_C" 69 "00000000")
+            result_auth=$(_hss_run_attach_json \
+                "$HSS_AUTH_NEG_IMSI" "$HSS_AUTH_WRONG_KI" \
+                "$HSS_AUTH_NEG_MSISDN" 70)
+            att_a=$(_hss_json_get "$result_a" "attach")
+            att_b=$(_hss_json_get "$result_b" "attach")
+            att_c=$(_hss_json_get "$result_c" "attach")
+            att_auth=$(_hss_json_get "$result_auth" "attach")
+
+            raw_csv_rows=""
+            for attempt in 1 2 3 4 5; do
+                raw_csv_rows=$(docker exec mme sh -c \
+                    "if [ -f '$audit_csv' ]; then head -n 25 '$audit_csv'; fi" \
+                    2>/dev/null | tr -d '\r')
+                if printf '%s\n' "$raw_csv_rows" | grep -q "$HSS_AUTH_NEG_IMSI" &&
+                   printf '%s\n' "$raw_csv_rows" | grep -q "$HSS_AUTH_UNKNOWN_IMSI_C" &&
+                   printf '%s\n' "$raw_csv_rows" | grep -q "$HSS_AUTH_UNKNOWN_IMSI_B" &&
+                   printf '%s\n' "$raw_csv_rows" | grep -q "$HSS_AUTH_UNKNOWN_IMSI"; then
+                    break
+                fi
+                sleep 1
+            done
+
+            # One UE operation can legitimately produce more than one reject
+            # type (for example Attach Reject followed by Service Reject), and
+            # NAS may also retransmit a request. Select the intended event for
+            # each test IMSI without removing anything from the operational CSV.
+            csv_rows=$(printf '%s\n' "$raw_csv_rows" | awk -F',' \
+                -v auth="$HSS_AUTH_NEG_IMSI" \
+                -v third="$HSS_AUTH_UNKNOWN_IMSI_C" \
+                -v second="$HSS_AUTH_UNKNOWN_IMSI_B" \
+                -v first="$HSS_AUTH_UNKNOWN_IMSI" '
+                    NR == 1 { print; next }
+                    $4 == auth && $5 == "Authentication Reject" &&
+                        !seen["auth"]++ { print; next }
+                    $4 == third && $5 == "Attach Reject" &&
+                        !seen["third"]++ { print; next }
+                    $4 == second && $5 == "Attach Reject" &&
+                        !seen["second"]++ { print; next }
+                    $4 == first && $5 == "Attach Reject" &&
+                        !seen["first"]++ { print; next }
+                ')
+
+            header=$(printf '%s\n' "$csv_rows" | sed -n '1p')
+            newest=$(printf '%s\n' "$csv_rows" | sed -n '2p')
+            previous=$(printf '%s\n' "$csv_rows" | sed -n '3p')
+            older=$(printf '%s\n' "$csv_rows" | sed -n '4p')
+            oldest=$(printf '%s\n' "$csv_rows" | sed -n '5p')
+            IFS=',' read -r newest_date newest_time newest_imei \
+                newest_imsi newest_message newest_cause newest_reason <<< "$newest"
+            IFS=',' read -r previous_date previous_time previous_imei \
+                previous_imsi previous_message previous_cause previous_reason <<< "$previous"
+            IFS=',' read -r older_date older_time older_imei \
+                older_imsi older_message older_cause older_reason <<< "$older"
+            IFS=',' read -r oldest_date oldest_time oldest_imei \
+                oldest_imsi oldest_message oldest_cause oldest_reason <<< "$oldest"
+
+            append_report_block "Mobility Reject attempts" \
+                "first=${result_a}
+second=${result_b}
+security_capability_mismatch=${result_c}
+wrong_ki=${result_auth}"
+            append_report_block "Mobility Reject CSV raw top rows" \
+                "$raw_csv_rows"
+            append_report_block "Mobility Reject CSV top rows" "$csv_rows"
+
+            if [ "$att_a" != "False" ] || [ "$att_b" != "False" ] ||
+               [ "$att_c" != "False" ] || [ "$att_auth" != "False" ]; then
+                fail "Negative attach scenario was not rejected" \
+                    "unknown_first=${att_a}, unknown_second=${att_b}, security_capability=${att_c}, wrong_ki=${att_auth}"
+            elif [ "$header" != \
+                    "date,time,imei,imsi,reject_message,reject_cause,reject_reason" ]; then
+                fail "Mobility Reject CSV header is invalid" \
+                    "path=${audit_csv}; header=${header}"
+            elif [ "$newest_imsi" != "$HSS_AUTH_NEG_IMSI" ] ||
+                 [ "$previous_imsi" != "$HSS_AUTH_UNKNOWN_IMSI_C" ] ||
+                 [ "$older_imsi" != "$HSS_AUTH_UNKNOWN_IMSI_B" ] ||
+                 [ "$oldest_imsi" != "$HSS_AUTH_UNKNOWN_IMSI" ]; then
+                fail "Mobility Reject CSV is not newest-first" \
+                    "expected ${HSS_AUTH_NEG_IMSI},${HSS_AUTH_UNKNOWN_IMSI_C},${HSS_AUTH_UNKNOWN_IMSI_B},${HSS_AUTH_UNKNOWN_IMSI}; got ${newest_imsi},${previous_imsi},${older_imsi},${oldest_imsi}"
+            elif [ "$newest_message" != "Authentication Reject" ] ||
+                 [ "$newest_cause" != "N/A" ] ||
+                 [ "$newest_reason" != \
+                    "Authentication response verification failed" ]; then
+                fail "Authentication Reject CSV row is incorrect" \
+                    "row=${newest}"
+            elif [ "$previous_message" != "Attach Reject" ] ||
+                 [ "$older_message" != "Attach Reject" ] ||
+                 [ "$oldest_message" != "Attach Reject" ] ||
+                 [ "$previous_cause" != "23" ] ||
+                 [ "$older_cause" != "8" ] ||
+                 [ "$oldest_cause" != "8" ]; then
+                fail "Attach Reject CSV rows are incorrect" \
+                    "expected causes 23,8,8; rows=${previous}|${older}|${oldest}"
+            elif [ "$previous_reason" != \
+                    "UE security capabilities mismatch" ] ||
+                 [ "$older_reason" != \
+                    "EPS services and non-EPS services not allowed" ] ||
+                 [ "$oldest_reason" != \
+                    "EPS services and non-EPS services not allowed" ]; then
+                fail "Attach Reject CSV reason is incorrect" \
+                    "expected readable causes for 23,8,8; got ${previous_reason},${older_reason},${oldest_reason}"
+            elif ! [[ "$newest_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
+                 ! [[ "$newest_time" =~ ^[0-9]{2}:[0-9]{2}:[0-9]{2}$ ]] ||
+                 [ -z "$newest_imei" ]; then
+                fail "Mobility Reject CSV date/time/IMEI fields are invalid" \
+                    "row=${newest}"
+            else
+                pass "MME initialized its audit and logged live Authentication, security-capability, and unknown-IMSI rejects newest-first"
+            fi
+        fi
+    fi
+
+    # TC-12: Offline full-catalog verification. This writes an isolated test
+    # CSV and never inserts synthetic events into the operational MME audit.
+    if should_run_test 12; then
+        _TEST_NUM=12
+        local catalog_output catalog_binary catalog_result
+        local catalog_ok catalog_count catalog_distinct catalog_error
+        local catalog_binary_verified deployed_revision
+
+        catalog_output="/opt/test/reports/unauthorized_attach_attempts.all-causes.test.csv"
+        catalog_binary="/tmp/open5gs-mmed.attach-reject-audit"
+
+        # The full EMM attach-reject cause catalog is embedded in
+        # attach_reject_catalog.py (EXPECTED_CAUSES) — no external open5gs
+        # source/patch is shipped with the suite. The deployed open5gs-mmed
+        # binary is the validation target.
+        if ! container_is_running "mme"; then
+            fail "Attach Reject deployed-binary verification cannot run" \
+                "MME container is not running"
+        elif ! docker cp \
+                "mme:/open5gs/install/bin/open5gs-mmed" \
+                "$catalog_binary" >/dev/null 2>&1; then
+            fail "Attach Reject deployed-binary verification cannot run" \
+                "Cannot copy /open5gs/install/bin/open5gs-mmed from the MME container"
+        else
+            deployed_revision=$(docker inspect --format \
+                '{{ index .Config.Labels "com.lekhawireless.epc.revision" }}' \
+                mme 2>/dev/null)
+            catalog_result=$("$PYTHON_BIN" \
+                /opt/test/ue_sim/attach_reject_catalog.py \
+                --output "$catalog_output" \
+                --binary "$catalog_binary" 2>&1)
+            rm -f "$catalog_binary"
+            catalog_ok=$(_hss_json_get "$catalog_result" "ok")
+            catalog_count=$(_hss_json_get "$catalog_result" "cause_count")
+            catalog_distinct=$(_hss_json_get \
+                "$catalog_result" "distinct_code_count")
+            catalog_binary_verified=$(_hss_json_get \
+                "$catalog_result" "binary_verified")
+            catalog_error=$(_hss_json_get "$catalog_result" "errors")
+
+            append_report_block "Attach Reject full cause catalog" \
+                "$catalog_result
+CSV=${catalog_output}"
+
+            if [ "$catalog_ok" != "True" ]; then
+                fail "Attach Reject cause catalog verification failed" \
+                    "${catalog_error:-$catalog_result}"
+            elif [ "$catalog_count" != "42" ] ||
+                 [ "$catalog_distinct" != "42" ]; then
+                fail "Attach Reject cause count is incorrect" \
+                    "expected 42 names/42 codes; got ${catalog_count}/${catalog_distinct}"
+            elif [ "$catalog_binary_verified" != "True" ]; then
+                fail "Deployed MME binary mapping verification failed" \
+                    "$catalog_result"
+            elif [ -z "${EPC_VERSION:-}" ] ||
+                 [ "$deployed_revision" != "$EPC_VERSION" ]; then
+                fail "Deployed MME revision does not match .env" \
+                    "expected EPC_VERSION=${EPC_VERSION:-missing}; image label=${deployed_revision:-missing}"
+            elif [ ! -s "$catalog_output" ]; then
+                fail "Attach Reject all-causes test CSV was not populated" \
+                    "$catalog_output"
+            else
+                pass "Deployed MME revision ${deployed_revision} contains all four reject-message audit paths, all 42 cause mappings, and the newest-first CSV schema"
             fi
         fi
     fi

@@ -186,12 +186,15 @@ run_tec_tests() {
         log "TC-${_TEST_NUM}: Conference and call merge infrastructure"
         local conf_report
         conf_report=$(tec_report_path "Conference")
-        if tec_report_has_pass "$conf_report" "All 4 members joined conference room" && \
-           tec_report_has_pass "$conf_report" "Conference rooms 1014 and 1015 running concurrently"; then
-            pass "TEC conference infrastructure: multi-member and concurrent conference evidence present"
-            tec_matrix_add "T3/B3285" "Conference/merge" "conference" "partial" "FreeSWITCH conference covered; real UE REFER/Replaces merge still manual" "Enable conf-factory DNS and add real-UE 4-party merge"
+        # Conference tests are now COMPLETE-PATH (register → P-CSCF → FreeSWITCH) with
+        # per-bridge CDR assertions; match the multi-member (4-UE) and distinct-room
+        # (CDR isolation) evidence produced by the reworked conference feature.
+        if tec_report_has_pass "$conf_report" "UE audio conference (complete path)" && \
+           tec_report_has_pass "$conf_report" "Distinct complete-path conferences isolated"; then
+            pass "TEC conference infrastructure: complete-path multi-member and distinct-room (CDR-verified) conference evidence present"
+            tec_matrix_add "T3/B3285" "Conference/merge" "conference" "partial" "Complete-path conferences (register→P-CSCF→FS) with N-in-N CDR verified; real UE REFER/Replaces merge still manual" "Add real-UE 4-party merge (REFER/Replaces)"
         else
-            fail "TEC conference infrastructure evidence missing" "Conference report lacks multi-member or concurrent conference pass"
+            fail "TEC conference infrastructure evidence missing" "Conference report lacks complete-path multi-member or distinct-room conference pass"
             tec_matrix_add "T3/B3285" "Conference/merge" "conference" "fail" "conference automation incomplete" "Fix conference feature and enable conf-factory routing"
         fi
     fi

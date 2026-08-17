@@ -20,6 +20,10 @@ x-sipp-test-5g-common: &sipp-test-5g-common
     - ./features:/opt/test/features:ro
     - ./scenarios:/opt/test/scenarios:ro
     - ./ueransim:/opt/test/ueransim:ro
+    # Native NGAP 5G UE simulator (keys5g/nas5g/ngap_client/ue5g_simulator).
+    # Registers many virtual UEs over one gNB SCTP association - the lightweight
+    # analogue of the 4G ue_sim, used for the 5G registration burst ceiling.
+    - ./ue_sim:/opt/test/ue_sim:ro
     - ./run_tests_5g.sh:/opt/test/run_tests_5g.sh:ro
     - ./reports:/opt/test/reports
 

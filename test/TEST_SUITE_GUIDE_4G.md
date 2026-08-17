@@ -174,7 +174,7 @@ conformance tests), and — because it is `--bundle all` — also generates the
 | key | group | TCs | what it covers |
 |---|---|---:|---|
 | `epc_health` | EPC Health | 20 | EPC/IMS container + interface health — **runs first** |
-| `hss_auc` | HSS AUC Auth | 10 | HSS/AUC authentication, SQN, IMS AKA |
+| `hss_auc` | HSS AUC Auth | 12 | HSS/AUC authentication, SQN, IMS AKA, live Attach Reject audit plus deployed-binary/catalog verification of 42 named causes and the future-cause fallback |
 | `pdn_session` | PDN Session | 9 | PDN/APN/default‑bearer establishment |
 | `pyhss_api` | PyHSS API Negative | 10 | PyHSS REST negative‑input validation (malformed IMSI/Ki/OPc/JSON → 400) |
 | `attach_churn` | Attach Detach Churn | 9 | attach/detach lifecycle churn |
@@ -184,10 +184,10 @@ conformance tests), and — because it is `--bundle all` — also generates the
 | `eir` | EIR | 6 | EIR / subscriber + AUC + IMS provisioning |
 | `sms` | SMS | 13 | SMS over IMS, intra/inter‑NIB, **store‑and‑forward** (offline recipient) |
 | `inter_nib` | Inter‑NIB | 8 | shared inter‑NIB infra: I‑CSCF routing, DNS, INVITE |
-| `conference` | Conference | 15 | conf‑factory + inter‑NIB + single **24‑audio / 8‑video** conference soak |
+| `conference` | Conference | 17 | **complete‑path** conferences (register → P‑CSCF → FreeSWITCH, R‑URI `1NNR`) incl. single **24‑audio / 8‑video** soak — each asserts **exactly N `LEG` rows** in `conf_cdr.csv`; plus conf‑factory ingress + inter‑NIB |
 | `fxo_fxs` | FXO/FXS | 5 | analog/FXO‑FXS breakout (skips without hardware) |
 | `mobile_ip` | Mobile‑to‑IP | 6 | same‑IMS mobile‑to‑softphone (needs `SOFTPHONE_TARGET_URI`) |
-| `cdr` | CDR | 7 | Call Detail Record file/fields/media‑type |
+| `cdr` | CDR | 13 | VoLTE/ViLTE CDR (S‑CSCF `cdr.csv`) + **conference CDR** (FreeSWITCH‑sourced `conf_cdr.csv`): 9‑col schema, newest‑on‑top, 7‑day retention, and a real‑UE conference dial (register → P‑CSCF → FreeSWITCH) |
 | `load` | Load Test | 14 | capacity ramps + data‑plane throughput/jitter |
 | `mms` | MMS | 18 | MMS/Kannel/Mbuni, intra/inter‑NIB, MM7 |
 | `stress` | Stress Test | 8 | stability / extreme‑condition |
@@ -272,10 +272,11 @@ another branch, verify these before a release/TEC run:
 - `#!define IPSEC_MAX_CONN 30` — sized for a 24‑UE VoLTE conference (+ headroom). **Do not drop to 20.**
 - `children=8` — with `open_files_limit=65536`. This is deliberate: `children` × `(2·IPSEC_MAX_CONN+1)` forks must keep the CDP Diameter (Rx) socket fd **< 1024**, or `select()` breaks the Rx peer. Keep the rule `children*(2*IPSEC_MAX_CONN+1)+overhead < 1024`.
 - `modparam("ims_qos","authorize_video_flow",1)` — ViLTE/QCI‑2.
+- **Conference CDR (FreeSWITCH‑sourced)**: conference dials (`1NNR`) route P‑CSCF → FreeSWITCH (never via the S‑CSCF). The conference bridge lives on the host NIB's **FreeSWITCH**, which is now the **single source** of the CDR: a `mod_lua` script (`conference_cdr.lua`) consumes `conference::maintenance` events and writes each participant's `LEG` row (on leave) plus the `CONF` summary (on destroy) to `/cdr-logs/conf_cdr.csv` via the shared `conf-cdr-logger.sh` (host `/var/log/kamailio/`) — 9‑col schema, newest‑on‑top, `kamailio-conf-cdr` logrotate. Because the bridge sees **every** member — including participants relayed in from other NIBs — the host‑NIB CDR is complete for inter‑NIB conferences. (The old P‑CSCF `confcdr` htable/`exec.so` path is compiled out via `WITH_PCSCF_CONF_CDR`, kept only as a single‑NIB fallback.)
 
 **S‑CSCF** (`scscf/scscf.cfg`, `scscf/kamailio_scscf.cfg`):
 - `#!define WITH_TCP`, `WITH_AUTH`.
-- CDR route/htable/logging (`/cdr-logs/cdr.csv` + logrotate) for the CDR feature.
+- CDR route/htable/logging (`/cdr-logs/cdr.csv` + logrotate) for VoLTE/ViLTE CDR. (Conference CDR is on the P‑CSCF — see above.)
 - USER_ONLINE active‑presence branch + inter‑NIB MESSAGE routing for SMS store‑and‑forward and inter‑NIB SMS.
 
 ---

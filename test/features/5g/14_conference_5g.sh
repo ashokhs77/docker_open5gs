@@ -5,80 +5,101 @@
 # 4G VoLTE and 5G VoNR. Conference routing and media rely on the same components;
 # the only difference is the access bearer (PDU session instead of LTE bearer).
 #
+# COMPLETE-PATH conversion: the conference *call* tests dial a room number (1NNR)
+# THROUGH the P-CSCF (INVITE sip:<room>@IMS_DOMAIN → P-CSCF FSDISPATCH → FreeSWITCH),
+# NOT a direct FreeSWITCH dial. Since the IMS is shared with 4G, this exercises the
+# same conference engine AND the same P-CSCF conference CDR. Assertion rule:
+# N UEs dialed ⇒ EXACTLY N `LEG` rows for that bridge in the P-CSCF conf_cdr.csv.
+# SIPp clients from TEST_NETWORK are accepted by the P-CSCF WITH_SIPP_TEST bypass.
+#
 # Tests:
-#   TC-1:  DNS conf-factory resolution
-#   TC-2:  Direct FreeSWITCH VoNR conference (1010)
-#   TC-3:  P-CSCF VoNR conf-factory routing
-#   TC-4:  Direct FreeSWITCH video SDP conference (1010)
-#   TC-5:  P-CSCF video conf-factory routing
-#   TC-6:  Sequential conference rooms
-#   TC-7:  Multi-member conference join (4 members)
-#   TC-8:  Hold SDP via conf-factory
-#   TC-9:  Conference cleanup/room reuse
-#   TC-10: Concurrent conferences (two rooms)
+#   TC-1:  DNS conf-factory resolution (infra)
+#   TC-2:  1-UE audio VoNR conference — COMPLETE path (room 1010)
+#   TC-3:  P-CSCF VoNR conf-factory routing (P-CSCF-side; gated on conf-factory DNS)
+#   TC-4:  1-UE video ViNR conference — COMPLETE path (room 1011)
+#   TC-5:  P-CSCF video conf-factory routing (P-CSCF-side; gated on conf-factory DNS)
+#   TC-6:  Sequential conf-factory rooms (P-CSCF-side; gated on conf-factory DNS)
+#   TC-7:  4-UE audio VoNR conference — COMPLETE path (room 1012)
+#   TC-8:  Hold SDP via conf-factory (P-CSCF-side; gated on conf-factory DNS)
+#   TC-9:  Conference room reuse — COMPLETE path (room 1013 → 2 CDR rows)
+#   TC-10: Distinct conference rooms + CDR isolation — COMPLETE path (rooms 1014, 1015)
 #   TC-11: PCF N5 QoS policy path for IMS sessions (5G-specific: QoS flows)
 #   TC-12: PCF N5 SBI interface reachability (replaces Rx Diameter peer check)
 #   TC-13: Inter-NIB conference INVITE (join conference at external domain)
-#   TC-14: 24-member SINGLE audio (VoNR) conference — join + sustained hold past rtp-timeout
-#   TC-15: 8-member  SINGLE video (ViNR) conference — join + sustained hold past rtp-timeout
+#   TC-14: N-UE SINGLE audio (VoNR) conference — COMPLETE path (24 → room 1016; N ⇒ N CDR rows)
+#   TC-15: N-UE SINGLE video (ViNR) conference — COMPLETE path (8 → room 1017; N ⇒ N CDR rows)
 #
-# TC-14/15 model the "N UEs in ONE conference" requirement (24 VoNR audio / 8 ViNR video):
-# launch N SIPp legs into ONE FreeSWITCH room, measure REAL membership via fs_cli, hold past
-# the 30s rtp-timeout. Verdict: conference must form (>= floor) and all joined members must
-# stay (no mid-hold drops). Reaches the full N (24/8) in-suite; legs are spaced 10 ports apart
-# on -mp because SIPp reserves a 4-port media block per call.
-# Shared IMS/FreeSWITCH with 4G (same conference engine); scenarios shared with 4G TC-14/15.
-# Env-tunable: CONF_AUDIO_MEMBERS=24, CONF_VIDEO_MEMBERS=8, CONF_SOAK_SECS=45,
-#              CONF_AUDIO_ROOM=1022, CONF_VIDEO_ROOM=1023, CONF_JOIN_STAGGER=0.4.
+# The conf-factory tests (TC-3/5/6/8) route through the P-CSCF (not a direct FS dial)
+# and remain gated on conf-factory DNS. TC-14/15 hold is kept < FS 30s rtp-timeout (no
+# real RTP is sourced) so legs stay simultaneously in the room until they BYE.
+# Env-tunable: CONF_AUDIO_MEMBERS=24, CONF_VIDEO_MEMBERS=8, CONF_SOAK_SECS=20,
+#              CONF_AUDIO_ROOM=1016, CONF_VIDEO_ROOM=1017, CONF_CALL_HOLD=6,
+#              CONF_MULTI_HOLD=20, CONF_JOIN_STAGGER=0.3.
 
 set +e
 
-# fs_cli path inside the FreeSWITCH container (IMS is shared 4G/5G)
-FS_CLI="/usr/local/freeswitch/bin/fs_cli"
+# ============================================================================
+# COMPLETE-PATH conference helpers (5G VoNR). The IMS (P-CSCF + FreeSWITCH) is
+# shared with 4G, so conference behaviour and the conference CDR are identical.
+#
+# Every conference *call* below dials a room number (1NNR) THROUGH the P-CSCF
+# (INVITE sip:<room>@IMS_DOMAIN → P-CSCF FSDISPATCH → FreeSWITCH), NOT a direct
+# FreeSWITCH dial. This is the real IMS path and it also drives the P-CSCF
+# conference CDR (`/cdr-logs/conf_cdr.csv`). SIPp clients from TEST_NETWORK are
+# accepted via the P-CSCF WITH_SIPP_TEST bypass. Assertion (per requirement):
+# N UEs dialed ⇒ EXACTLY N `LEG` rows for that bridge in conf_cdr.csv.
+# ============================================================================
 
-# Real conference membership count for a room (0 if room absent/empty)
-_conf_member_count() {
-    docker exec freeswitch "$FS_CLI" -x "conference $1 list count" 2>/dev/null | tr -dc '0-9'
+# Count LEG rows for a conference bridge id (col 1 == LEG, col 8 == room).
+_conf_cdr_leg_count() {
+    local room="$1"
+    docker exec pcscf sh -c \
+        "test -f /cdr-logs/conf_cdr.csv && awk -F',' -v r='${room}' '\$1==\"LEG\" && \$8==r{c++} END{print c+0}' /cdr-logs/conf_cdr.csv || echo 0" \
+        2>/dev/null | tr -dc '0-9'
 }
 
-# Wait for FreeSWITCH to drain active channels left by a prior soak, so back-to-back
-# soak TCs (e.g. TC-14's 24-leg teardown -> TC-15) each start from a clean state.
-_fs_drain() {
-    local w=0 ch
-    while [ "$w" -lt "${CONF_DRAIN_MAX:-20}" ]; do
-        ch=$(docker exec freeswitch "$FS_CLI" -x "show channels count" 2>/dev/null | grep -oE '^[0-9]+' | head -1)
-        [ -z "$ch" ] && ch=0
-        [ "$ch" -le "${CONF_DRAIN_OK:-2}" ] && return 0
-        sleep 2; w=$((w+2))
-    done
-}
-
-# Launch N SIPp legs into ONE room, hold past rtp-timeout, measure membership.
-# Sets globals: CONF_SOAK_JOINED, CONF_SOAK_RETAINED, CONF_SOAK_PIDS.
-# Args: $1=scenario $2=N $3=room $4=sip_port_base $5=rtp_port_base $6=hold_secs
-_conf_soak_launch() {
-    local scn="$1" n="$2" room="$3" spbase="$4" rpbase="$5" hold="$6" i jp pids=""
-    docker exec freeswitch "$FS_CLI" -x "conference ${room} kick all" >/dev/null 2>&1 || true
-    _fs_drain   # let any prior soak's channels tear down before launching this one
+# Launch N SIPp legs dialing <room> through the P-CSCF, hold, then BYE. No assertion
+# (used both by _conf_pcscf_case and directly by the reuse/isolation TCs).
+# Args: $1=N $2=room $3=media(audio|video) $4=hold_secs
+_conf_pcscf_dial() {
+    local n="$1" room="$2" media="$3" hold="$4"
+    local scn="/opt/test/scenarios/fs_pcscf_conf_audio.xml"
+    [ "$media" = "video" ] && scn="/opt/test/scenarios/fs_pcscf_conf_video.xml"
+    local tmp="/tmp/pcscf_conf_${media}_5g.xml"
+    sed "s/IMS_DOMAIN/$IMS_DOMAIN/g" "$scn" > "$tmp"
+    local hold_ms=$(( hold * 1000 )) pids="" i port
     for i in $(seq 1 "$n"); do
-        # SIPp reserves a 4-port media block per call (audio RTP/RTCP + video RTP/RTCP),
-        # so legs must be spaced >=4 apart on -mp or they collide ("Address already in use").
-        # Use a stride of 10 for headroom.
-        sipp "${FREESWITCH_IP}:5090" -sf "$scn" -s "$room" \
-            -i "$LOCAL_IP" -p $(( spbase + i )) -mp $(( rpbase + i*10 )) \
-            -m 1 -l 1 -rtp_echo -timeout 140 -timeout_error \
-            >/tmp/sipp_confsoak_${room}_${i}.log 2>&1 &
+        port=$(( 7300 + i ))
+        sipp "${PCSCF_IP}:${PCSCF_PORT:-5060}" -sf "$tmp" -s "$room" \
+            -i "$LOCAL_IP" -p "$port" -d "$hold_ms" \
+            -m 1 -l 1 -timeout $(( hold + 30 )) -timeout_error \
+            >/tmp/sipp_pcscfconf_${room}_${i}.log 2>&1 &
         pids="$pids $!"
-        sleep "${CONF_JOIN_STAGGER:-0.4}"   # stagger joins like real UEs (avoid a thundering-herd INVITE burst)
+        sleep "${CONF_JOIN_STAGGER:-0.3}"
     done
-    CONF_SOAK_PIDS="$pids"
-    sleep "${CONF_JOIN_WAIT:-18}"
-    CONF_SOAK_JOINED=$(_conf_member_count "$room"); CONF_SOAK_JOINED=${CONF_SOAK_JOINED:-0}
-    sleep "$hold"
-    CONF_SOAK_RETAINED=$(_conf_member_count "$room"); CONF_SOAK_RETAINED=${CONF_SOAK_RETAINED:-0}
-    docker exec freeswitch "$FS_CLI" -x "conference ${room} kick all" >/dev/null 2>&1 || true
-    for jp in $CONF_SOAK_PIDS; do kill "$jp" 2>/dev/null; done
-    for jp in $CONF_SOAK_PIDS; do wait "$jp" 2>/dev/null || true; done
+    for i in $pids; do wait "$i" 2>/dev/null || true; done
+    sleep 3   # let the P-CSCF exec_msg flush LEG rows after the BYEs
+}
+
+# One TC: N UEs dial <room> through the P-CSCF, then assert EXACTLY N new LEG rows.
+# Args: $1=N $2=room $3=media(audio|video) $4=hold_secs $5=human-label
+_conf_pcscf_case() {
+    local n="$1" room="$2" media="$3" hold="$4" label="$5"
+    if ! check_port "$PCSCF_IP" "${PCSCF_PORT:-5060}"; then
+        skip "$label" "P-CSCF not reachable"
+        return
+    fi
+    local before; before=$(_conf_cdr_leg_count "$room"); before=${before:-0}
+    _conf_pcscf_dial "$n" "$room" "$media" "$hold"
+    local after; after=$(_conf_cdr_leg_count "$room"); after=${after:-0}
+    local delta=$(( after - before ))
+    echo "  ${label}: conf_cdr LEG rows(delta)=${delta}/${n} (room ${room}, complete path)" >> "$_FEATURE_REPORT"
+    if [ "$delta" -eq "$n" ]; then
+        pass "${label}: ${n} UEs dialed room ${room} via P-CSCF → exactly ${n} conf_cdr LEG rows"
+    else
+        fail "${label}: complete-path CDR count mismatch" \
+             "expected ${n} LEG rows for room ${room}, got ${delta} — system/routing/CDR shortfall on the complete path"
+    fi
 }
 
 run_conference_5g_tests() {
@@ -115,22 +136,11 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-2: Direct FreeSWITCH VoNR conference 1010
+    # TC-2: 1-UE audio VoNR conference over the COMPLETE path (P-CSCF-routed)
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: Direct FreeSWITCH VoNR conference (1010)"
-        sipp ${FREESWITCH_IP}:5090 \
-            -sf /opt/test/scenarios/fs_direct_invite.xml \
-            -s 1010 \
-            -i $LOCAL_IP -p 7100 \
-            -m 1 -l 1 -timeout 15 -timeout_error \
-            >/tmp/sipp_conf5g_tc2.log 2>&1
-        RESULT=$?
-        if [ $RESULT -eq 0 ]; then
-            pass "FreeSWITCH accepted VoNR INVITE to conference room 1010"
-        else
-            fail "FreeSWITCH rejected INVITE to 1010" "SIPp exit code: $RESULT"
-        fi
+        log "TC-${_TEST_NUM}: 1-UE audio VoNR conference via complete path (INVITE 1010 → P-CSCF → FreeSWITCH)"
+        _conf_pcscf_case 1 1010 audio "${CONF_CALL_HOLD:-6}" "1-UE audio VoNR conference (complete path)"
     fi
 
     # TC-3: P-CSCF VoNR conf-factory routing
@@ -155,22 +165,11 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-4: Direct FreeSWITCH video SDP conference (video over NR)
+    # TC-4: 1-UE video (ViNR) conference over the COMPLETE path (P-CSCF-routed)
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: Direct FreeSWITCH video SDP conference (1010 with video)"
-        sipp ${FREESWITCH_IP}:5090 \
-            -sf /opt/test/scenarios/fs_direct_video_invite.xml \
-            -s 1010 \
-            -i $LOCAL_IP -p 7300 \
-            -m 1 -l 1 -timeout 15 -timeout_error \
-            >/tmp/sipp_conf5g_tc4.log 2>&1
-        RESULT=$?
-        if [ $RESULT -eq 0 ]; then
-            pass "FreeSWITCH accepted video SDP to conference 1010 (Video over NR)"
-        else
-            fail "FreeSWITCH video SDP conference 1010 failed" "SIPp exit code: $RESULT"
-        fi
+        log "TC-${_TEST_NUM}: 1-UE video ViNR conference via complete path (INVITE 1011 → P-CSCF → FreeSWITCH)"
+        _conf_pcscf_case 1 1011 video "${CONF_CALL_HOLD:-6}" "1-UE video ViNR conference (complete path)"
     fi
 
     # TC-5: P-CSCF video conf-factory routing
@@ -222,34 +221,11 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-7: Multi-member conference join — 4 members to room 1011
+    # TC-7: 4-UE audio VoNR conference over the COMPLETE path (P-CSCF-routed)
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: Multi-member VoNR conference join (4 members to room 1011)"
-        MEMBER_PIDS=""
-        for i in 1 2 3 4; do
-            PORT=$((7600 + $i))
-            sipp ${FREESWITCH_IP}:5090 \
-                -sf /opt/test/scenarios/fs_long_call.xml \
-                -s 1011 -i $LOCAL_IP -p $PORT \
-                -m 1 -l 1 -timeout 30 -timeout_error \
-                >/tmp/sipp_conf5g_tc7_m${i}.log 2>&1 &
-            MEMBER_PIDS="$MEMBER_PIDS $!"
-        done
-        sleep 5
-        RUNNING_COUNT=0
-        for PID in $MEMBER_PIDS; do
-            kill -0 $PID 2>/dev/null && RUNNING_COUNT=$((RUNNING_COUNT + 1))
-        done
-        if [ $RUNNING_COUNT -ge 4 ]; then
-            pass "All 4 members joined VoNR conference room 1011 simultaneously"
-        elif [ $RUNNING_COUNT -ge 2 ]; then
-            pass "Multi-member VoNR conference partially working ($RUNNING_COUNT of 4 joined)"
-        else
-            fail "VoNR conference multi-member join failed" "$RUNNING_COUNT of 4 members connected"
-        fi
-        for PID in $MEMBER_PIDS; do kill $PID 2>/dev/null; done
-        for PID in $MEMBER_PIDS; do wait $PID 2>/dev/null || true; done
+        log "TC-${_TEST_NUM}: 4-UE audio VoNR conference via complete path (room 1012 → P-CSCF → FreeSWITCH)"
+        _conf_pcscf_case 4 1012 audio "${CONF_MULTI_HOLD:-20}" "4-UE audio VoNR conference (complete path)"
     fi
 
     # TC-8: Hold SDP via conf-factory
@@ -273,53 +249,58 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-9: Conference cleanup/room reuse
+    # TC-9: conference room reuse over the COMPLETE path (dial → teardown → re-dial).
+    # Two sequential single-UE dials to the same room via the P-CSCF; expect the room
+    # reusable and EXACTLY 2 CDR LEG rows total.
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: Conference room 1013 reusable after BYE"
-        sipp ${FREESWITCH_IP}:5090 -sf /opt/test/scenarios/fs_direct_invite.xml \
-            -s 1013 -i $LOCAL_IP -p 7800 -m 1 -l 1 -timeout 15 -timeout_error \
-            >/tmp/sipp_conf5g_tc9a.log 2>&1; RESULT_A=$?
-        sleep 2
-        sipp ${FREESWITCH_IP}:5090 -sf /opt/test/scenarios/fs_direct_invite.xml \
-            -s 1013 -i $LOCAL_IP -p 7801 -m 1 -l 1 -timeout 15 -timeout_error \
-            >/tmp/sipp_conf5g_tc9b.log 2>&1; RESULT_B=$?
-
-        if [ $RESULT_A -eq 0 ] && [ $RESULT_B -eq 0 ]; then
-            pass "Conference room 1013 reusable after BYE teardown"
-        elif [ $RESULT_A -eq 0 ]; then
-            fail "Rejoin to room 1013 failed after BYE" "Cleanup issue, SIPp exit: $RESULT_B"
+        log "TC-${_TEST_NUM}: conference room 1013 reuse via complete path (dial, teardown, re-dial)"
+        if ! check_port "$PCSCF_IP" "${PCSCF_PORT:-5060}"; then
+            skip "Conference room reuse (complete path)" "P-CSCF not reachable"
         else
-            fail "Initial join to room 1013 failed" "SIPp exit: $RESULT_A"
+            local r9_before r9_after
+            r9_before=$(_conf_cdr_leg_count 1013); r9_before=${r9_before:-0}
+            local tmp9="/tmp/pcscf_conf_reuse_5g.xml"
+            sed "s/IMS_DOMAIN/$IMS_DOMAIN/g" /opt/test/scenarios/fs_pcscf_conf_audio.xml > "$tmp9"
+            sipp "${PCSCF_IP}:${PCSCF_PORT:-5060}" -sf "$tmp9" -s 1013 -i "$LOCAL_IP" -p 7810 \
+                -d $(( ${CONF_CALL_HOLD:-6} * 1000 )) -m 1 -l 1 -timeout 40 -timeout_error \
+                >/tmp/sipp_conf5g_tc9a.log 2>&1
+            sleep 2
+            sipp "${PCSCF_IP}:${PCSCF_PORT:-5060}" -sf "$tmp9" -s 1013 -i "$LOCAL_IP" -p 7811 \
+                -d $(( ${CONF_CALL_HOLD:-6} * 1000 )) -m 1 -l 1 -timeout 40 -timeout_error \
+                >/tmp/sipp_conf5g_tc9b.log 2>&1
+            sleep 3
+            r9_after=$(_conf_cdr_leg_count 1013); r9_after=${r9_after:-0}
+            if [ $(( r9_after - r9_before )) -eq 2 ]; then
+                pass "Room 1013 reusable via complete path: 2 sequential dials → exactly 2 CDR LEG rows"
+            else
+                fail "Room 1013 reuse over complete path failed" "CDR LEG delta=$(( r9_after - r9_before ))/2"
+            fi
         fi
     fi
 
-    # TC-10: Concurrent conferences (two rooms simultaneously)
+    # TC-10: distinct conference rooms over the COMPLETE path (routing + per-bridge
+    # CDR isolation). Two rooms (1014, 1015), each a 2-UE conference via the P-CSCF;
+    # each bridge must record EXACTLY its own 2 LEG rows.
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: Concurrent VoNR conferences (rooms 1014 and 1015)"
-        sipp ${FREESWITCH_IP}:5090 -sf /opt/test/scenarios/fs_long_call.xml \
-            -s 1014 -i $LOCAL_IP -p 7900 -m 1 -l 1 -timeout 30 -timeout_error \
-            >/tmp/sipp_conf5g_tc10_r1.log 2>&1 &
-        PID_ROOM1=$!
-        sipp ${FREESWITCH_IP}:5090 -sf /opt/test/scenarios/fs_long_call.xml \
-            -s 1015 -i $LOCAL_IP -p 7901 -m 1 -l 1 -timeout 30 -timeout_error \
-            >/tmp/sipp_conf5g_tc10_r2.log 2>&1 &
-        PID_ROOM2=$!
-        sleep 5
-        ROOM1_RUNNING=false; ROOM2_RUNNING=false
-        kill -0 $PID_ROOM1 2>/dev/null && ROOM1_RUNNING=true
-        kill -0 $PID_ROOM2 2>/dev/null && ROOM2_RUNNING=true
-
-        if $ROOM1_RUNNING && $ROOM2_RUNNING; then
-            pass "VoNR conference rooms 1014 and 1015 running concurrently"
-        elif $ROOM1_RUNNING || $ROOM2_RUNNING; then
-            fail "One of two concurrent VoNR conference rooms failed" ""
+        log "TC-${_TEST_NUM}: distinct VoNR conference rooms 1014 + 1015 via complete path (CDR isolation)"
+        if ! check_port "$PCSCF_IP" "${PCSCF_PORT:-5060}"; then
+            skip "Distinct conference rooms (complete path)" "P-CSCF not reachable"
         else
-            fail "Both concurrent VoNR conferences failed" ""
+            local b14 b15 a14 a15
+            b14=$(_conf_cdr_leg_count 1014); b14=${b14:-0}
+            b15=$(_conf_cdr_leg_count 1015); b15=${b15:-0}
+            _conf_pcscf_dial 2 1014 audio "${CONF_MULTI_HOLD:-20}"
+            _conf_pcscf_dial 2 1015 audio "${CONF_MULTI_HOLD:-20}"
+            a14=$(_conf_cdr_leg_count 1014); a14=${a14:-0}
+            a15=$(_conf_cdr_leg_count 1015); a15=${a15:-0}
+            if [ $(( a14 - b14 )) -eq 2 ] && [ $(( a15 - b15 )) -eq 2 ]; then
+                pass "Distinct complete-path VoNR conferences isolated: rooms 1014 and 1015 each recorded exactly 2 CDR LEG rows"
+            else
+                fail "Distinct complete-path conference CDR isolation mismatch" "room 1014 LEG delta=$(( a14 - b14 ))/2, room 1015 LEG delta=$(( a15 - b15 ))/2"
+            fi
         fi
-        kill $PID_ROOM1 $PID_ROOM2 2>/dev/null
-        wait $PID_ROOM1 2>/dev/null || true; wait $PID_ROOM2 2>/dev/null || true
     fi
 
     # TC-11: PCF N5 QoS policy path for IMS sessions (5G-specific)
@@ -422,59 +403,25 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-14: N-member SINGLE audio (VoNR) conference — the "24 UEs in one conference" requirement
+    # TC-14: N-UE SINGLE audio (VoNR) conference — "24 UEs in one conference" over the
+    # COMPLETE path. N SIPp legs dial ONE room through the P-CSCF and overlap for the
+    # hold window. Requirement: N UEs ⇒ EXACTLY N CDR LEG rows.
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        local n_aud="${CONF_AUDIO_MEMBERS:-24}" room_aud="${CONF_AUDIO_ROOM:-1022}" hold_a="${CONF_SOAK_SECS:-45}"
-        log "TC-${_TEST_NUM}: ${n_aud}-member SINGLE audio (VoNR) conference (room ${room_aud}); join + ${hold_a}s sustained hold (past FS 30s rtp-timeout)"
-        if ! check_port "$FREESWITCH_IP" 5090; then
-            skip "${n_aud}-member single VoNR audio conference" "FreeSWITCH SIP (5090) not reachable"
-        else
-            _conf_soak_launch /opt/test/scenarios/fs_conf_soak_audio.xml "$n_aud" "$room_aud" 20000 24000 "$hold_a"
-            log "  VoNR audio room ${room_aud}: joined=${CONF_SOAK_JOINED}/${n_aud}, retained after ${hold_a}s=${CONF_SOAK_RETAINED}"
-            echo "  ${n_aud}-member VoNR AUDIO conf (room ${room_aud}): joined=${CONF_SOAK_JOINED}/${n_aud}, retained=${CONF_SOAK_RETAINED} after ${hold_a}s" >> "$_FEATURE_REPORT"
-            # STABILITY is the verdict; join count is an in-suite ceiling (SIPp legs co-located with FS),
-            # NOT a core/FS limit — real-UE / multi-host load reaches the full target.
-            local floor_a="${CONF_AUDIO_FLOOR:-4}"
-            if [ "${CONF_SOAK_JOINED:-0}" -lt "$floor_a" ]; then
-                fail "${n_aud}-member VoNR audio conference did not form" "only ${CONF_SOAK_JOINED} joined room ${room_aud} (floor ${floor_a}) — FreeSWITCH/IMS conference path problem"
-            elif [ "${CONF_SOAK_RETAINED:-0}" -lt $(( CONF_SOAK_JOINED * 90 / 100 )) ]; then
-                fail "${n_aud}-member VoNR audio conference UNSTABLE — members dropped mid-hold" "joined=${CONF_SOAK_JOINED}, retained=${CONF_SOAK_RETAINED} after ${hold_a}s — real teardown (Rx-AAR/session-timer/rtp-timeout); investigate core"
-            elif [ "${CONF_SOAK_JOINED:-0}" -ge "$n_aud" ]; then
-                pass "${n_aud}-member single VoNR audio conference: full ${CONF_SOAK_JOINED}/${n_aud} joined ONE room and held stable ${hold_a}s past rtp-timeout"
-            else
-                pass "Single VoNR audio conference STABLE at ${CONF_SOAK_JOINED}/${n_aud} members (all ${CONF_SOAK_RETAINED} retained ${hold_a}s, zero mid-hold drops). Join count is the in-suite ceiling (${n_aud} SIPp legs co-located with FS on one host); core/FS conference path is stable — full ${n_aud} reached with real-UE / multi-host load"
-            fi
-        fi
+        local n_aud="${CONF_AUDIO_MEMBERS:-24}" room_aud="${CONF_AUDIO_ROOM:-1016}" hold_a="${CONF_SOAK_SECS:-20}"
+        log "TC-${_TEST_NUM}: ${n_aud}-UE SINGLE audio (VoNR) conference via COMPLETE path (room ${room_aud} → P-CSCF → FreeSWITCH), ${hold_a}s hold"
+        _conf_pcscf_case "$n_aud" "$room_aud" audio "$hold_a" "${n_aud}-UE audio VoNR conference (complete path)"
     fi
 
-    # TC-15: N-member SINGLE video (ViNR) conference — the "8 UEs in one video conference" requirement
+    # TC-15: N-UE SINGLE video (ViNR) conference — "8 UEs in one video conference" over
+    # the COMPLETE path (audio+video SDP). Requirement: N UEs ⇒ EXACTLY N CDR LEG rows.
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
-        local n_vid="${CONF_VIDEO_MEMBERS:-8}" room_vid="${CONF_VIDEO_ROOM:-1023}" hold_v="${CONF_SOAK_SECS:-45}"
-        log "TC-${_TEST_NUM}: ${n_vid}-member SINGLE video (ViNR) conference (room ${room_vid}); join + ${hold_v}s sustained hold"
-        if ! check_port "$FREESWITCH_IP" 5090; then
-            skip "${n_vid}-member single ViNR video conference" "FreeSWITCH SIP (5090) not reachable"
-        else
-            _conf_soak_launch /opt/test/scenarios/fs_conf_soak_video.xml "$n_vid" "$room_vid" 21000 26000 "$hold_v"
-            log "  ViNR video room ${room_vid}: joined=${CONF_SOAK_JOINED}/${n_vid}, retained after ${hold_v}s=${CONF_SOAK_RETAINED}"
-            echo "  ${n_vid}-member ViNR VIDEO conf (room ${room_vid}): joined=${CONF_SOAK_JOINED}/${n_vid}, retained=${CONF_SOAK_RETAINED} after ${hold_v}s" >> "$_FEATURE_REPORT"
-            # SIPp offers an H.264 m-line but sources no real video RTP → validates JOIN + SUSTAINED
-            # MEMBERSHIP, not video media quality (real video needs real UEs; ViNR H.264 runs via
-            # FreeSWITCH PROXY-VID pass-through, confirmed working with real UEs).
-            local floor_v="${CONF_VIDEO_FLOOR:-2}"
-            if [ "${CONF_SOAK_JOINED:-0}" -lt "$floor_v" ]; then
-                fail "${n_vid}-member ViNR video conference did not form" "only ${CONF_SOAK_JOINED} joined room ${room_vid} (floor ${floor_v}) — FreeSWITCH/IMS video-conference path problem"
-            elif [ "${CONF_SOAK_RETAINED:-0}" -lt $(( CONF_SOAK_JOINED * 90 / 100 )) ]; then
-                fail "${n_vid}-member ViNR video conference UNSTABLE — members dropped mid-hold" "joined=${CONF_SOAK_JOINED}, retained=${CONF_SOAK_RETAINED} after ${hold_v}s — real teardown (Rx-AAR/session-timer/rtp-timeout); investigate core"
-            elif [ "${CONF_SOAK_JOINED:-0}" -ge "$n_vid" ]; then
-                pass "${n_vid}-member single ViNR video conference: full ${CONF_SOAK_JOINED}/${n_vid} joined ONE room (audio+video SDP) and held stable ${hold_v}s past rtp-timeout"
-            else
-                pass "Single ViNR video conference STABLE at ${CONF_SOAK_JOINED}/${n_vid} members (all ${CONF_SOAK_RETAINED} retained ${hold_v}s, zero mid-hold drops). Join count is the in-suite ceiling (SIPp legs co-located with FS on one host); video-conference path is stable — full ${n_vid} reached with real-UE / multi-host load"
-            fi
-        fi
+        local n_vid="${CONF_VIDEO_MEMBERS:-8}" room_vid="${CONF_VIDEO_ROOM:-1017}" hold_v="${CONF_SOAK_SECS:-20}"
+        log "TC-${_TEST_NUM}: ${n_vid}-UE SINGLE video (ViNR) conference via COMPLETE path (room ${room_vid} → P-CSCF → FreeSWITCH), ${hold_v}s hold"
+        _conf_pcscf_case "$n_vid" "$room_vid" video "$hold_v" "${n_vid}-UE video ViNR conference (complete path)"
     fi
 
-    rm -f /tmp/sipp_conf5g_tc*.log /tmp/sipp_confsoak_*.log /tmp/test_conf_factory_5g.xml /tmp/test_vilte_conf_factory_5g.xml /tmp/test_hold_detect_5g.xml 2>/dev/null
+    rm -f /tmp/sipp_conf5g_tc*.log /tmp/sipp_confsoak_*.log /tmp/sipp_pcscfconf_*.log /tmp/pcscf_conf_*_5g.xml /tmp/test_conf_factory_5g.xml /tmp/test_vilte_conf_factory_5g.xml /tmp/test_hold_detect_5g.xml 2>/dev/null
     end_feature
 }

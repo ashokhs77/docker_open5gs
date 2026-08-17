@@ -27,6 +27,7 @@
 FROM ubuntu:jammy AS builder
 
 ARG LICENSE=OFF
+ARG EPC_VERSION=unknown
 ENV LICENSE=${LICENSE}
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -81,7 +82,7 @@ RUN ldconfig
 # cache and builder layers small.
 RUN git init open5gs && cd open5gs && \
     git remote add origin https://github.com/ashokhs77/open5gs && \
-    git fetch --depth 1 origin 3e439b8856cb47f00c33a89baa4bc607a05176ad && \
+    git fetch --depth 1 origin d6cce54d43c672d6b54e281f90293ede4c3b1fcc && \
     git checkout FETCH_HEAD && \
     git submodule update --init --recursive --depth 1 && \
     if [ "$LICENSE" = "OFF" ]; then \
@@ -94,11 +95,19 @@ RUN git init open5gs && cd open5gs && \
     ninja -C build && cd build && ninja install && \
     (find ../install/bin ../install/lib -type f -exec strip --strip-unneeded {} + 2>/dev/null || true)
 
+# NOTE: The MME/AMF unauthorized-attach / mobility-reject audit feature is now
+# part of the pinned open5gs source (github.com/ashokhs77/open5gs), so it is
+# compiled by the meson/ninja build above. No patch is applied here anymore.
+
 # Building WebUI of open5gs
 #RUN cd open5gs/webui && npm ci
 
 # Build final image
 FROM ubuntu:jammy
+
+ARG EPC_VERSION=unknown
+LABEL org.opencontainers.image.version="${EPC_VERSION}" \
+      com.lekhawireless.epc.revision="${EPC_VERSION}"
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -153,4 +162,10 @@ RUN ldconfig
 WORKDIR /open5gs
 
 COPY open5gs_init.sh /
+
+# Self-heal line endings: a CRLF shebang (from Windows-edited/synced sources) makes
+# the kernel look for "/bin/bash\r" and the container dies at startup with
+# "exec /open5gs_init.sh: no such file or directory". Strip CRs at build time.
+RUN sed -i 's/\r$//' /open5gs_init.sh && chmod +x /open5gs_init.sh
+
 CMD ["/open5gs_init.sh"]

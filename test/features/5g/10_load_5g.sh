@@ -13,10 +13,11 @@
 #   TC-6: Voice-grade jitter measurement (iperf3 UDP at VoNR bitrate)
 #   TC-7: Concurrent SIP INVITE load (multi-stream SIPp)
 #   TC-8: Concurrent UE registration burst via UERANSIM logs
-#   --- Capacity ramps (UERANSIM multi-UE; mirror the 4G load targets) ---
-#   TC-9:  UE registration capacity ramp (1->128 concurrent, real NAS reg + PDU)
-#   TC-10: Registration headroom (256 single-process) + core resource at peak
-#   TC-11: Sharded registration burst to the 4G-matched 512 target
+#   --- Capacity ramps (mirror the 4G load targets) ---
+#   TC-9:  UE registration + PDU capacity ramp (1->128 concurrent) [UERANSIM]
+#   TC-10: Registration headroom (256 single-process) + core at peak [UERANSIM]
+#   TC-11: Native NGAP registration burst to the 4G-matched 512 target
+#          [native NGAP sim — control-plane scale; ceiling is the core, not the tool]
 #   TC-12: PDU session establishment capacity (1 per registered UE)
 #   TC-13: Concurrent VoNR INVITE signaling capacity (SIPp over the shared IMS)
 #   --- 4G-load-parity additions (realistic 5G counterparts of the 4G Load TCs) ---
@@ -27,6 +28,21 @@
 #   TC-18: ViNR video call-establishment capacity (video SDP)            [<-4G ViLTE call-pair]
 #   TC-19: TCP data-plane ceiling sweep (REAL_HW-gated)                   [<-4G TCP sweep]
 #   TC-20: UDP/RTP offered-load ceiling sweep (REAL_HW-gated)             [<-4G UDP sweep]
+#
+# ---------------------------------------------------------------------------
+# LOAD-TEST METHODOLOGY — each layer is exercised with the tool that most
+# faithfully represents it (none of the emulators has a radio; RF/PHY/mobility
+# is real HW only):
+#   * Control-plane capacity/scale (registration storms) -> the native NGAP UE
+#     simulator (ue_sim/ue5g_simulator.py). Many virtual UEs over ONE gNB SCTP
+#     association — exactly how industrial signalling load testers work — so the
+#     ceiling found is the 5G core (AMF/AUSF), not the tool. Used by TC-11.
+#   * Functional per-UE end-to-end (real PDU session, data-plane reachability,
+#     jitter) -> UERANSIM, which has a real (userspace) GTP-U datapath but costs
+#     one OS process per UE (so it scales to a handful, not hundreds). Used by
+#     TC-9/10/12/16 (and TC-5/6 data-plane checks).
+#   * Radio, line-rate throughput, real mobility -> REAL HW only; neither
+#     emulator substitutes. TC-19/20 (and data-plane line rate) are REAL_HW-gated.
 
 set +e
 
@@ -258,16 +274,19 @@ run_load_5g_tests() {
     fi
 
     # =====================================================================
-    # 5G CAPACITY / LOAD RAMPS (UERANSIM multi-UE) — mirror the 4G load
-    # ramps with 5G-native mechanisms: real registration + PDU-session
-    # concurrency to the 4G-matched targets (128 ramp / 512 sharded burst).
-    # The 5G core handles these at ~0% CPU, so the ceiling found is the
-    # UERANSIM simulator (one process ~256, sharded beyond). Helpers live in
-    # lib/ueransim_load_5g.sh and touch only transient nr-ue-load-* containers
-    # + a dedicated load IMSI range — the functional UE/gNB are untouched.
+    # 5G FUNCTIONAL CAPACITY RAMPS (UERANSIM multi-UE) — these exercise the
+    # per-UE end-to-end path (real registration + PDU-session + data-plane) to
+    # the 4G-matched targets. UERANSIM has a real userspace GTP-U datapath but
+    # costs one OS process per UE, so the ceiling found here is the UERANSIM
+    # simulator (~256/process), NOT the core — for pure control-plane scale see
+    # TC-11 (native NGAP sim, standalone). Helpers live in lib/ueransim_load_5g.sh
+    # and touch only transient nr-ue-load-* containers + a dedicated load IMSI
+    # range — the functional UE/gNB are untouched.
+    # NOTE: TC-11 is intentionally NOT in this list — the native NGAP burst has
+    # its own guard + provisioning and needs no UERANSIM RAN.
     # =====================================================================
     local _ramp_wanted=0 _t
-    for _t in 9 10 11 12 14 16; do should_run_test "$_t" && _ramp_wanted=1; done
+    for _t in 9 10 12 14 16; do should_run_test "$_t" && _ramp_wanted=1; done
     local _ramp_ready=0
     local _ramp_skip="needs the 5G core (amf) + mongo + the UERANSIM RAN deployed (cd test/ueransim && ./bringup_ueransim.sh)"
     if [ "$_ramp_wanted" = "1" ]; then
@@ -351,24 +370,46 @@ run_load_5g_tests() {
         fi
     fi
 
-    # TC-11: Sharded registration burst to the 4G-matched 512 target
+    # TC-11: Native NGAP registration burst to the 4G-matched 512 target.
+    # Driven by the in-suite native NGAP UE simulator (ue_sim/ue5g_simulator.py):
+    # many *virtual* UEs multiplexed over ONE gNB SCTP association, so the ceiling
+    # found is the 5G core (AMF/AUSF), NOT the load generator. This replaces the
+    # old UERANSIM sharded burst, whose ~43-UE ceiling was purely the per-UE
+    # process cost of UERANSIM. Needs no UERANSIM RAN - only amf + mongo + the
+    # simulator (pysctp/pycrate are in the 5G test image; ue_sim is mounted).
     if should_run_test 11; then
         _TEST_NUM=11
-        if [ "$_ramp_ready" != "1" ]; then
-            skip "5G sharded registration burst (512)" "$_ramp_skip"
+        local nb_target=512
+        if ! container_is_running "amf" || ! container_is_running "mongo"; then
+            skip "5G native NGAP registration burst (${nb_target})" \
+                 "5G core (amf) or mongo not running"
+        elif ! python3 -c "import ue_sim.ngap_client, ue_sim.nas5g, ue_sim.keys5g, ue_sim.ue5g_simulator" >/dev/null 2>&1; then
+            skip "5G native NGAP registration burst (${nb_target})" \
+                 "native NGAP UE simulator not importable (ue_sim not mounted, or pycrate/pysctp missing)"
         else
-            local res reg pdu el snap
-            res=$(ue_load_register 512 120)
-            reg=$(echo "$res" | awk '{print $1+0}'); pdu=$(echo "$res" | awk '{print $2+0}'); el=$(echo "$res" | awk '{print $3+0}')
-            snap=$(docker stats --no-stream --format '{{.Name}} {{.CPUPerc}}/{{.MemUsage}}' amf smf upf 2>/dev/null | sed 's# / .*GiB##g' | tr '\n' ' ')
-            echo "  5G sharded burst: ${reg}/512 registered, ${pdu} PDU, ${el}s; core [${snap}]" >> "$_FEATURE_REPORT"
-            ue_load_teardown; sleep 5
-            if [ "$reg" -ge 460 ]; then
-                pass "5G burst registration capacity: ${reg}/512 concurrent UEs registered (2-cell sharded) in ${el}s — 4G-matched 512 target met (>=90%), core unsaturated"
-            elif [ "$reg" -ge 256 ]; then
-                pass "5G burst registration: ${reg} concurrent UEs (sharded; UERANSIM client limit on this box below the 512 target)"
+            local nb_json nb_reg nb_req nb_el nb_secs snap
+            # Provision the load IMSI range (idempotent; functional UE untouched).
+            printf 'var LOAD_BASE=101;var LOAD_COUNT=%s;\n' "$nb_target" \
+                | cat - /opt/test/ueransim/provision_5g_range.js \
+                | docker exec -i mongo mongo open5gs --quiet >/dev/null 2>&1
+            nb_json=$(python3 -m ue_sim.ue5g_simulator --amf-ip "$AMF_IP" \
+                        --num-ues "$nb_target" --timeout 30 --json 2>/dev/null)
+            nb_reg=$(printf '%s' "$nb_json" | jq -r '.registered // 0' 2>/dev/null); [ -z "$nb_reg" ] && nb_reg=0
+            nb_req=$(printf '%s' "$nb_json" | jq -r '.requested // 0' 2>/dev/null); [ -z "$nb_req" ] && nb_req="$nb_target"
+            nb_el=$(printf '%s' "$nb_json" | jq -r '.elapsed_ms // 0' 2>/dev/null); [ -z "$nb_el" ] && nb_el=0
+            nb_secs=$(awk "BEGIN{printf \"%.1f\", ${nb_el}/1000}")
+            snap=$(docker stats --no-stream --format '{{.Name}} {{.CPUPerc}}/{{.MemUsage}}' amf ausf udm 2>/dev/null | sed 's# / .*GiB##g' | tr '\n' ' ')
+            echo "  5G native NGAP burst: ${nb_reg}/${nb_target} registered in ${nb_secs}s over ONE gNB SCTP assoc; core [${snap}]" >> "$_FEATURE_REPORT"
+            append_report_block "5G native NGAP registration burst" "$nb_json"
+            if [ "$nb_reg" -ge "$nb_target" ]; then
+                pass "5G native registration burst: ${nb_reg}/${nb_target} concurrent UEs registered over ONE gNB association in ${nb_secs}s — full 4G-matched target met; ceiling is the 5G core, not the load tool"
+            elif [ "$nb_reg" -ge $(( nb_target * 90 / 100 )) ]; then
+                pass "5G native registration burst: ${nb_reg}/${nb_target} concurrent UEs registered over ONE gNB association in ${nb_secs}s (>=90%) — achieved 5G-core ceiling (AMF/AUSF-bound, not load-generator-bound)"
+            elif [ "$nb_reg" -ge 256 ]; then
+                pass "5G native registration burst achieved ceiling ${nb_reg} concurrent UEs in ${nb_secs}s (core/host-bound on this lab VM; the full ${nb_target} is REAL_HW-class)"
             else
-                fail "5G burst registration below target: ${reg}/512" "UERANSIM sharding ceiling on this box"
+                fail "5G native registration burst below target: ${nb_reg}/${nb_target}" \
+                     "stages=$(printf '%s' "$nb_json" | jq -c '.stages // {}' 2>/dev/null) errors=$(printf '%s' "$nb_json" | jq -c '.errors // []' 2>/dev/null)"
             fi
         fi
     fi

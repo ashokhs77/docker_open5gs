@@ -256,6 +256,8 @@ Feature: 5G Registration (--feature registration)
   TC-7:  UE Registration Request sent
   TC-8:  UE Registration Accepted
   TC-9:  AMF UE context processed
+  TC-10: Real unprovisioned UE Registration Reject audited newest-first
+  TC-11: All 50 5GMM causes verified in deployed AMF binary and test CSV
 
 Feature: PDU Session (--feature pdu_session)
   TC-1:  SMF PFCP port 8805
@@ -326,6 +328,12 @@ Feature: CDR (5G) (--feature cdr_5g)
   TC-5:  CDR audio/call type
   TC-6:  CDR logrotate config
   TC-7:  CDR field completeness
+  TC-8:  conf-cdr-logger.sh + exec.so on P-CSCF (conference CDR, shared IMS)
+  TC-9:  confcdr htable configured on P-CSCF
+  TC-10: conference CDR logrotate config
+  TC-11: conf CDR write-path (9-col schema, newest-on-top, 7-day retention)
+  TC-12: dial conference 1010 through P-CSCF -> conf_cdr.csv row
+  TC-13: live conf_cdr.csv field validation
 
 Feature: Network Slicing (--feature slicing)
   TC-1:  NSSF SBI port reachable
@@ -337,6 +345,8 @@ Feature: Network Slicing (--feature slicing)
   TC-7:  UPF DNN/slice config
 
 Feature: Load Test (5G) (--feature load_5g)
+  Methodology: native NGAP sim = control-plane scale (TC-11); UERANSIM =
+  functional per-UE data-plane (TC-9/10/12/16); real HW = radio/line-rate (TC-19/20).
   TC-1:  gNB NGAP connection ramp
   TC-2:  NRF API throughput
   TC-3:  UDM API throughput
@@ -347,7 +357,8 @@ Feature: Load Test (5G) (--feature load_5g)
   TC-8:  UE registration burst (UERANSIM)
   TC-9:  UE registration capacity ramp (1->128 concurrent, real NAS reg + PDU)
   TC-10: Registration headroom (256 single-process) + core resource at peak
-  TC-11: Sharded registration burst to the 4G-matched 512 target
+  TC-11: Native NGAP registration burst to the 4G-matched 512 target
+         (in-suite NGAP UE sim over one gNB SCTP assoc; ceiling = 5G core, not load tool)
   TC-12: PDU session establishment capacity (1 per registered UE)
   TC-13: Concurrent VoNR INVITE signaling capacity (SIPp over the shared IMS)
   TC-14: gNB NG-Setup capacity (concurrent dedicated load cells)        [4G eNB-capacity parity]
@@ -396,20 +407,20 @@ Feature: MMS over 5GS (--feature mms_5g)
 
 Feature: Conference (5G VoNR) (--feature conference_5g)
   TC-1:  DNS conf-factory resolution
-  TC-2:  Direct FreeSWITCH VoNR conference (1010)
+  TC-2:  1-UE audio VoNR conference — COMPLETE path (room 1010, N-in-N CDR)
   TC-3:  P-CSCF VoNR conf-factory routing
-  TC-4:  Direct FreeSWITCH video SDP conference (1010)
+  TC-4:  1-UE video ViNR conference — COMPLETE path (room 1011, N-in-N CDR)
   TC-5:  P-CSCF video conf-factory routing
-  TC-6:  Sequential conference rooms
-  TC-7:  Multi-member VoNR conference join (4 members)
+  TC-6:  Sequential conf-factory rooms
+  TC-7:  4-UE audio VoNR conference — COMPLETE path (room 1012, N-in-N CDR)
   TC-8:  Hold SDP via conf-factory
-  TC-9:  Conference cleanup/room reuse
-  TC-10: Concurrent VoNR conferences (two rooms)
+  TC-9:  Conference room reuse — COMPLETE path (room 1013)
+  TC-10: Distinct conference rooms + CDR isolation — COMPLETE path (1014, 1015)
   TC-11: PCF N5 QoS policy path for IMS sessions
   TC-12: PCF N5 SBI interface reachability
   TC-13: Inter-NIB conference INVITE (external domain)
-  TC-14: 24-member SINGLE audio (VoNR) conference — join + sustained hold past rtp-timeout (stability primary; join count is in-suite ceiling, full N via real-UE/multi-host)
-  TC-15: 8-member  SINGLE video (ViNR) conference — join + sustained hold (stability primary; real video media needs real UEs)
+  TC-14: 24-UE SINGLE audio (VoNR) conference — COMPLETE path (room 1016); 24 UEs ⇒ exactly 24 conf_cdr LEG rows
+  TC-15: 8-UE  SINGLE video (ViNR) conference — COMPLETE path (room 1017); 8 UEs ⇒ exactly 8 conf_cdr LEG rows
 
 Feature: Advanced SIP (5G VoNR) (--feature advanced_sip_5g)
   TC-1:  RTP echo — UAC with -rtp_echo to FreeSWITCH (real media loopback)

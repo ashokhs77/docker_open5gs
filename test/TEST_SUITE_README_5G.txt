@@ -81,6 +81,13 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
 
   NOTE: the load_5g feature launches its own dedicated load cells (nr-gnb-load-0/1) —
   you do NOT start those by hand. The --bundle 5gc smoke bundle needs NO UERANSIM.
+  NOTE: load_5g TC-11 (registration burst to 512) uses the native NGAP UE simulator
+  (ue_sim/ue5g_simulator.py), NOT UERANSIM — it needs only amf + mongo. It multiplexes
+  512 virtual UEs over ONE gNB SCTP association (live: 512/512 in ~6s), so the ceiling
+  is the 5G core, not the load tool. Run it standalone:
+    sudo docker compose -f docker-compose.test5g.yaml run --rm --no-deps \
+      --entrypoint python3 sipp-test-5g \
+      -m ue_sim.ue5g_simulator --amf-ip 172.22.1.10 --num-ues 512 --timeout 30 --json
 
 
 --------------------------------------------------------------------------------
@@ -131,7 +138,7 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
 --------------------------------------------------------------------------------
   CORE (19) — default run / --bundle full / --bundle all
     regression_5g(23)  5gc_health(20)  nrf_sbi(10)  ausf_udm(8)  registration(9)
-    pdu_session(7)  pdu_profile_5g(10)  vonr(11)  sms_5g(13)  cdr_5g(7)  slicing(7)
+    pdu_session(7)  pdu_profile_5g(10)  vonr(11)  sms_5g(13)  cdr_5g(13)  slicing(7)
     security_5g(14)  mms_5g(18)  conference_5g(15)  advanced_sip_5g(5)  stress_5g(9)
     video_vonr(10)  qos_flow_5g(10)  load_5g(20)
 

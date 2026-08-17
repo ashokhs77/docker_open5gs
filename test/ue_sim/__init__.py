@@ -18,6 +18,13 @@ __author__ = "Lekha Wireless Test Framework"
 
 from .config import Config
 from .milenage import Milenage
-from .ue_simulator import UESimulator
 
-__all__ = ["Config", "Milenage", "UESimulator"]
+# The 4G orchestrator pulls in the whole S1AP/NAS/SIP stack. Import it lazily so
+# the standalone 5G modules (keys5g/nas5g/ngap_client/ue5g_simulator) can be run
+# via `python -m ue_sim.ue5g_simulator` without requiring the 4G stack to load.
+try:
+    from .ue_simulator import UESimulator
+    __all__ = ["Config", "Milenage", "UESimulator"]
+except Exception:  # pragma: no cover - 4G stack optional for 5G-only use
+    UESimulator = None
+    __all__ = ["Config", "Milenage"]

@@ -56,7 +56,7 @@ services:
       default:
         ipv4_address: ${WEBUI_IP}
   nrf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     container_name: nrf
     env_file:
       - .env
@@ -73,7 +73,7 @@ services:
       default:
         ipv4_address: ${NRF_IP}
   scp:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
     container_name: scp
@@ -92,7 +92,7 @@ services:
       default:
         ipv4_address: ${SCP_IP}
   ausf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -112,7 +112,7 @@ services:
       default:
         ipv4_address: ${AUSF_IP}
   udr:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -133,7 +133,7 @@ services:
       default:
         ipv4_address: ${UDR_IP}
   udm:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -153,7 +153,7 @@ services:
       default:
         ipv4_address: ${UDM_IP}
   smf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -182,7 +182,7 @@ services:
       default:
         ipv4_address: ${SMF_IP}
   upf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -213,7 +213,7 @@ services:
       default:
         ipv4_address: ${UPF_IP}
   amf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -227,6 +227,7 @@ services:
       - .env
     environment:
       - COMPONENT_NAME=amf
+      - AMF_UNAUTHORIZED_REGISTRATION_CSV=${AMF_UNAUTHORIZED_REGISTRATION_CSV:-/open5gs/install/var/log/open5gs/unauthorized_registration_attempts.csv}
     volumes:
       - ./amf:/mnt/amf
       - ./log:/open5gs/install/var/log/open5gs
@@ -242,7 +243,7 @@ services:
       default:
         ipv4_address: ${AMF_IP}
   pcf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -264,7 +265,7 @@ services:
       default:
         ipv4_address: ${PCF_IP}
   bsf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -285,7 +286,7 @@ services:
       default:
         ipv4_address: ${BSF_IP}
   nssf:
-    image: docker_open5gs
+    image: docker_open5gs:${EPC_VERSION:?EPC_VERSION must be set in .env}
     depends_on:
       - nrf
       - scp
@@ -468,6 +469,7 @@ services:
       - ./pcscf:/mnt/pcscf
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - /var/log/kamailio:/cdr-logs
     env_file:
       - .env
     environment:
@@ -532,6 +534,11 @@ services:
     volumes:
       - ./freeswitch:/mnt/freeswitch
       - ./log:/open5gs/install/var/log/open5gs
+      # Conference CDR: FreeSWITCH is now the single source of conf_cdr.csv
+      # (mod_lua conference_cdr.lua -> shared conf_cdr_logger.sh). Same host path
+      # as the P-CSCF used, so the CDR file location/schema is unchanged.
+      - /var/log/kamailio:/cdr-logs
+      - ./ims_base/conf_cdr_logger.sh:/usr/local/bin/conf_cdr_logger.sh:ro
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
     command: ["/bin/bash", "/mnt/freeswitch/freeswitch_init.sh"]
@@ -618,4 +625,3 @@ volumes:
     name: docker_open5gs_dbdata
   mms_storage:
     name: docker_open5gs_mms_storage
-

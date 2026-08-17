@@ -1,0 +1,9 @@
+<configuration name="lua.conf" description="LUA Configuration">
+  <settings>
+    <!-- Conference CDR generator: runs at mod_lua load, in its own thread, and
+         consumes conference::maintenance events to write /cdr-logs/conf_cdr.csv.
+         See freeswitch/conference_cdr.lua. -->
+    <param name="startup-script" value="conference_cdr.lua"/>
+    <param name="script-directory" value="/usr/local/freeswitch/scripts/?.lua"/>
+  </settings>
+</configuration>

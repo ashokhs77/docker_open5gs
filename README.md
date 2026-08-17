@@ -148,14 +148,64 @@ docker tag ghcr.io/herlesupreeth/docker_swu_client:master docker_swu_client
 ### Build Docker images from source
 #### Clone repository and build deployment images for open5gs, kamailio, srsRAN_4G, and srsRAN_Project
 
+The MME records LTE Attach Reject, Authentication Reject, TAU Reject, and
+Service Reject decisions in
+`docker_open5gs/log/unauthorized_attach_attempts.csv`. The columns are
+`date,time,imei,imsi,reject_message,reject_cause,reject_reason`. EMM causes
+remain numeric and readable; Authentication Reject events without a transmitted
+cause use `N/A` and record the internal failure reason. The MME creates and
+validates the CSV during startup and refuses to start if the audit path is not
+writable. The newest rejection is immediately below the header. IMEI or IMSI
+is `unknown` only when it has not yet been learned or cannot be derived.
+
+The dashboard-facing CSV rotates at
+`MME_UNAUTHORIZED_ATTACH_MAX_BYTES` (10 MiB by default). Complete older files
+are retained beside it as timestamped `.archive.*.csv` files, while the active
+CSV continues with the newest event at the top.
+
+The HSS/AUC test feature contains two audit checks:
+
+- TC-11 first proves startup initialization, then performs real NAS attempts
+  for unknown IMSIs (cause 8), unusable UE security capabilities (cause 23),
+  and a provisioned IMSI using the wrong Ki (Authentication Reject). It verifies
+  the operational MME CSV, event types, reasons, and newest-first order.
+- TC-12 copies the actual `open5gs-mmed` executable from the running MME,
+  verifies the image revision label matches `EPC_VERSION`, all four audit paths
+  are compiled in, and it contains 42 named EMM reject mappings (the current
+  3GPP catalog plus the legacy Open5GS cause 4), the CSV header, rotation
+  support, and the fallback for future/unassigned numeric values, then writes
+  `test/reports/unauthorized_attach_attempts.all-causes.test.csv`.
+  This isolated file contains synthetic catalog rows; they are intentionally
+  not inserted into the operational audit.
+
+The AMF provides the equivalent audit for 5G Registration Reject decisions in
+`docker_open5gs/log/unauthorized_registration_attempts.csv`. Its columns are
+`date,time,imei,imsi,supi_or_suci,registration_reject_cause,registration_reject_reason`.
+The newest rejection is directly below the header. `supi_or_suci` preserves
+the identity actually known by the AMF; the `imsi` column is populated from an
+`imsi-` SUPI or an unprotected IMSI-format SUCI and is otherwise `unknown`.
+IMEI is `unknown` when the reject occurs before the UE supplies its PEI/IMEISV.
+Every numeric cause is logged; the readable catalog covers all 50 values in
+3GPP TS 24.501 Release 19 table 9.11.3.2.1 and uses a future/unassigned
+fallback for other values.
+
+The 5G Registration test feature adds:
+
+- TC-10 starts an isolated, unprovisioned UERANSIM UE and verifies that the
+  real AMF Registration Reject becomes the newest operational CSV row.
+- TC-11 verifies the deployed `open5gs-amfd` binary contains all 50 readable
+  mappings, the CSV header and fallback, and generates the isolated
+  `test/reports/unauthorized_registration_attempts.all-causes.test.csv`.
+
 ```
-# Build docker image for open5gs EPC/5GC components
+# Build all deployment images. This reads EPC_VERSION from .env, builds the
+# core as docker_open5gs:<EPC_VERSION>, and embeds the same revision label.
 git clone https://github.com/herlesupreeth/docker_open5gs
-cd docker_open5gs/base
-docker build --no-cache --force-rm -t docker_open5gs .
+cd docker_open5gs
+sudo ./build_all.sh
 
 # Build docker image for kamailio IMS components
-cd ../ims_base
+cd ims_base
 docker build --no-cache --force-rm -t docker_kamailio .
 
 # Build docker image for srsRAN_4G eNB + srsUE (4G+5G)
