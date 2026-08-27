@@ -12,7 +12,11 @@ else
 fi
 cp /usr/local/mbuni/etc/mbuni.conf /tmp/mbuni.conf
 
-# Substitute MMSC_IP first (needed before proxy group generation)
+# Fix Windows line endings in nib_registry.conf
+sed -i 's/\r//' /etc/mmsc/nib_registry.conf
+sed -i 's/\r//' /etc/mmsc/location_listener.py
+
+# Substitute MMSC_IP first
 sed -i "s|MMSC_IP|${MMSC_IP}|g" /tmp/kannel.conf
 # In 5G mode SMSC_IP replaces the SMSC_IP placeholder in kannel_5g.conf.
 # In 4G mode OSMOMSC_IP replaces the OsmoMSC host placeholder in kannel.conf.
@@ -37,17 +41,14 @@ EOF
 FIRST_REMOTE_NIB=""
 declare -A SEEN_IPS
 
-while IFS=: read -r NIB_NUM NIB_IP RANGE_START RANGE_END; do
+while IFS=: read -r NIB_NUM NIB_IP; do
     [[ "$NIB_NUM" =~ ^#.*$ ]] && continue
     [[ -z "$NIB_NUM" ]] && continue
     [[ "$NIB_IP" == "${MMSC_IP}" ]] && continue       # skip self
     [[ -n "${SEEN_IPS[$NIB_IP]}" ]] && continue       # skip duplicate IPs
     SEEN_IPS[$NIB_IP]=1
 
-    # Track first remote NIB for default msmtp account
-    if [ -z "$FIRST_REMOTE_NIB" ]; then
-        FIRST_REMOTE_NIB="$NIB_NUM"
-    fi
+    [ -z "$FIRST_REMOTE_NIB" ] && FIRST_REMOTE_NIB="$NIB_NUM"
 
     # Add mmsproxy group to mbuni.conf
     cat >> /tmp/mbuni.conf << EOF
@@ -55,7 +56,7 @@ while IFS=: read -r NIB_NUM NIB_IP RANGE_START RANGE_END; do
 group = mmsproxy
 name = nib${NIB_NUM}-relay
 host = ${NIB_IP}
-send-mail-prog = /usr/bin/msmtp -f '%f' '%t'
+send-mail-prog = /usr/local/bin/msmtp_route -f '%f' '%t'
 confirmed-delivery = false
 EOF
     echo "Added mmsproxy for NIB${NIB_NUM} at ${NIB_IP}"
@@ -82,9 +83,59 @@ fi
 
 chmod 644 /etc/msmtprc
 
+# Generate smart msmtp routing wrapper
+cat > /usr/local/bin/msmtp_route << 'SCRIPT'
+#!/bin/bash
+RECIPIENT=""
+FROM_ADDR=""
+SKIP=0
+
+for arg in "$@"; do
+    if [ "$SKIP" = "1" ]; then
+        FROM_ADDR="$arg"
+        SKIP=0
+        continue
+    fi
+    if [ "$arg" = "-f" ]; then
+        SKIP=1
+        continue
+    fi
+    RECIPIENT="$arg"
+done
+
+HOST="${RECIPIENT##*@}"
+
+ACCOUNT=""
+CURRENT_ACCOUNT=""
+while IFS= read -r line; do
+    if [[ "$line" =~ ^account\ (.+)$ ]]; then
+        CURRENT_ACCOUNT="${BASH_REMATCH[1]}"
+        [[ "$CURRENT_ACCOUNT" == default* ]] && continue
+    elif [[ "$line" =~ ^host\ (.+)$ ]]; then
+        if [ "${BASH_REMATCH[1]}" = "$HOST" ]; then
+            ACCOUNT="$CURRENT_ACCOUNT"
+            break
+        fi
+    fi
+done < /etc/msmtprc
+
+if [ -n "$ACCOUNT" ]; then
+    exec /usr/bin/msmtp -a "$ACCOUNT" -f "$FROM_ADDR" "$RECIPIENT"
+else
+    exec /usr/bin/msmtp -f "$FROM_ADDR" "$RECIPIENT"
+fi
+SCRIPT
+chmod +x /usr/local/bin/msmtp_route
+echo "msmtp_route wrapper created"
+
 # Start MM4 receiver
 python3 /etc/mmsc/mm4_receiver.py &
 sleep 2
+
+# Start roaming-aware location listener (tracks current-NIB overrides for
+# resolve_mmsc.sh, fed by S-CSCF on every REGISTER -- see location_listener.py)
+python3 /etc/mmsc/location_listener.py &
+sleep 1
 
 # Start Kannel bearerbox
 echo "Starting Kannel bearerbox..."

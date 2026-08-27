@@ -570,6 +570,7 @@ services:
       - ./mmsc/nib_registry.conf:/etc/mmsc/nib_registry.conf
       - ./mmsc/resolve_mmsc.sh:/etc/mmsc/resolve_mmsc.sh
       - ./mmsc/mm4_receiver.py:/etc/mmsc/mm4_receiver.py
+      - ./mmsc/location_listener.py:/etc/mmsc/location_listener.py
       - ./mmsc/mmsc_init.sh:/mmsc_init.sh
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro

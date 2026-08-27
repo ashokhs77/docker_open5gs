@@ -37,6 +37,14 @@ cp /mnt/scscf/CxDataType_Rel7.xsd /etc/kamailio_scscf
 cp /mnt/scscf/CxDataType_Rel8.xsd /etc/kamailio_scscf
 cp /mnt/scscf/dispatcher.list /etc/kamailio_scscf
 
+# Roaming-aware MMS routing: notify the local mmsc of the current serving NIB
+# on every successful REGISTER (see nib-location-notify.sh, called from
+# kamailio_scscf.cfg). Bind-mounted from the Windows host, so strip CRLF the
+# same way resolve_mmsc.sh does in mmsc_init.sh.
+cp /mnt/scscf/nib-location-notify.sh /usr/local/bin/nib-location-notify.sh
+sed -i 's/\r//' /usr/local/bin/nib-location-notify.sh
+chmod +x /usr/local/bin/nib-location-notify.sh
+
 while ! mysqladmin ping -h ${MYSQL_IP} --silent; do
 	sleep 5;
 done
@@ -76,6 +84,7 @@ sed -i 's|MYSQL_IP|'$MYSQL_IP'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_scscf/kamailio_scscf.cfg
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_scscf/kamailio_scscf.cfg
+sed -i 's|PYHSS_IP|'$PYHSS_IP'|g' /etc/kamailio_scscf/kamailio_scscf.cfg
 
 sed -i 's|SCSCF_IP|'$SCSCF_IP'|g' /etc/kamailio_scscf/scscf.xml
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_scscf/scscf.xml
