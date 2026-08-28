@@ -91,6 +91,8 @@ sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mo.cfg
 sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mt.cfg
 sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/register.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
+# Deployed PLMN, for the network-ringback condition in route/mo.cfg.
+sed -i 's|RBT_PLMN_ENV|'${MCC}${MNC}'|g' /etc/kamailio_pcscf/route/mo.cfg
 
 sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /etc/kamailio_pcscf/pcscf.xml
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_pcscf/pcscf.xml
