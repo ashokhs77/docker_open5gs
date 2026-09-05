@@ -5,3 +5,4 @@ log/
 **/*.db
 **/*.db-shm
 **/*.db-wal
+dev_docs/
