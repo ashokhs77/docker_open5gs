@@ -48,7 +48,7 @@ RUN apt-get update && \
 RUN git init /src/pyhss && \
     cd /src/pyhss && \
     git remote add origin https://github.com/ashokhs77/pyhss && \
-    git fetch --depth 1 origin 2a67c511fd8bc3e4e6dffa53173262813cffa874 && \
+    git fetch --depth 1 origin 9536e75012f003f40e773bfdc9e44de4dd837fd2 && \
     git checkout FETCH_HEAD && \
     python3 -m py_compile lib/database.py && \
     python3 -m py_compile lib/diameter.py && \
@@ -71,6 +71,8 @@ RUN sed -E 's/^mysqlclient([<>= ].*)?$/mysqlclient==2.1.1/' \
         python3 -c "import runpy; runpy.run_path('tests/test_serving_apn_lifecycle.py')['test_serving_apn_atomic_lifecycle']()" && \
     PYTHONPATH=/opt/pyhss-python:/src/pyhss/lib \
         python3 -c "import runpy; runpy.run_path('tests/test_rx_identity_resolution.py')['test_rx_identity_resolution']()" && \
+    PYTHONPATH=/opt/pyhss-python:/src/pyhss/lib \
+        python3 -c "import runpy; [runpy.run_path('services/%s.py' % s, run_name='pyhss_import_check') for s in ('diameterService', 'hssService')]" && \
     find /opt/pyhss-python -type d -name '__pycache__' -prune -exec rm -rf {} +
 
 FROM ubuntu:jammy
