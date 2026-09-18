@@ -41,6 +41,7 @@ Quite contrary to the name of the repository, this repository contains docker fi
   - [Manually configure DNS settings on your phone (WiFi connection)](#manually-configure-dns-settings-on-your-phone-wifi-connection)
   - [UE configuration](#ue-configuration)
 - [Not supported](#not-supported)
+- [Troubleshooting](#troubleshooting)
 
 ## Tested Setup
 
@@ -484,11 +485,11 @@ APN Configuration:
 ---------------------------------------------------------------------------------------------------------------------
 | internet | IPv4 | 9   | 8   | Disabled   | Disabled       | unlimited/unlimited |                 |               |
 |          |      | 1   | 2   | Enabled    | Enabled        | 128/128             | 128/128         |               |
-|          |      | 2   | 4   | Enabled    | Enabled        | 128/128             | 128/128         |               |
+|          |      | 2   | 4   | Enabled    | Enabled        | 512/512             | 512/512         |               |
 ---------------------------------------------------------------------------------------------------------------------
 | ims      | IPv4 | 5   | 1   | Disabled   | Disabled       | 3850/1530           |                 |               |
 |          |      | 1   | 2   | Enabled    | Enabled        | 128/128             | 128/128         |               |
-|          |      | 2   | 4   | Enabled    | Enabled        | 128/128             | 128/128         |               |
+|          |      | 2   | 4   | Enabled    | Enabled        | 512/512             | 512/512         |               |
 ---------------------------------------------------------------------------------------------------------------------
 ```
 
@@ -657,3 +658,20 @@ Password : admin
 ## Not supported
 - IPv6 usage in Docker
 
+- NSA mode
+- SMS concatenation (UDH) (this fork does buffer SMS for unregistered UEs: store-and-forward)
+- USSD over IMS
+- VoLTE on Samsung devices without root (CoIMS does not work)
+
+## Troubleshooting
+
+If something does not work, start with **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** —
+symptom-first checklists (attach / data / VoLTE-IMS-APN / call drops / SMS /
+VoWiFi / multi-host / radio), the standard pcap procedure, a list of harmless
+log messages, and the full "not supported" table.
+
+Quick answers:
+
+- **VoLTE symbol missing / no `ims` APN attach**: VoLTE is usually not truly enabled on the phone (Samsung: not possible; MediaTek: secret-code IMS menu; others: CoIMS). Never hand-select the `ims` APN on the phone, and keep the network PLMN aligned with the SIM PLMN (use 00101).
+- **Authentication failures**: don't mix up OP and OPc. The WebUI has a single "Operator Key (OPc/OP)" field — the value must match the selected type (OPc is derived from Ki+OP; pasting the OP value under "OPc" is the most common cause of MAC/EAP-AKA failures). The provisioning section's example uses the derived OPc (select **OPc**).
+- **"Address already in use" / duplicate RAN**: `docker compose down && docker system prune -f`, then redeploy.

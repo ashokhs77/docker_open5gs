@@ -139,6 +139,25 @@ sed -i 's|SQLALCHEMY_MAX_OVERFLOW|'$SQLALCHEMY_MAX_OVERFLOW'|g' ./config.yaml
 redis-server --daemonize yes
 
 cd services
+
+# PyHSS 2.0: only the main service (hssService) may create or upgrade the
+# database schema; the other services wait up to 20 s for it and then exit.
+# Several hssService workers starting together would race on that first-time
+# initialisation, so start one worker, wait for the schema version row, and
+# only then start the API, Diameter service and the remaining workers.
+echo "Starting ${HSS_SERVICE_WORKERS} PyHSS hssService worker(s)"
+python3 hssService.py &
+_hss_main_pid=$!
+_schema_wait=0
+until [ "$(mysql -u root -h ${MYSQL_IP} -s -N -e "SELECT COALESCE(MAX(upgrade_id),0) FROM ims_hss_db.database_schema_version" 2>/dev/null)" -ge 1 ] 2>/dev/null; do
+	_schema_wait=$((_schema_wait + 1))
+	if [ "$_schema_wait" -ge 60 ]; then
+		echo "PyHSS database schema not ready after 60 s; starting the remaining services anyway"
+		break
+	fi
+	sleep 1
+done
+
 python3 apiService.py &
 # Sleep is needed to let db be populated in a non-overlapping fashion
 sleep 5
@@ -146,9 +165,12 @@ python3 diameterService.py &
 # Sleep is needed to let db be populated in a non-overlapping fashion
 sleep 5
 
-echo "Starting ${HSS_SERVICE_WORKERS} PyHSS hssService worker(s)"
+if [ "$HSS_SERVICE_WORKERS" -le 1 ]; then
+	wait "$_hss_main_pid"
+	exit $?
+fi
 
-worker_id=1
+worker_id=2
 while [ "$worker_id" -lt "$HSS_SERVICE_WORKERS" ]; do
 	python3 hssService.py &
 	worker_id=$((worker_id + 1))

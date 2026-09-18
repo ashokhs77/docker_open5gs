@@ -102,6 +102,10 @@ hss:
     rtoInitial: 1000
 
 api:
+  # PyHSS 2.0 binds the REST API to 127.0.0.1 unless bind_ip is set. It must be
+  # reachable from the host, other containers and the test suite (provisioning).
+  bind_ip: "0.0.0.0"
+  bind_port: 8080
   page_size: 200
   # Whether or not to return key-based data when querying the AUC. Disable in production systems.
   enable_insecure_auc: True
