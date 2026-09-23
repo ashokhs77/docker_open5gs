@@ -1,6 +1,23 @@
+# Debian 11 (bullseye) LTS ended on 2026-08-31. Its security updates are being
+# removed from deb.debian.org (the index still lists them, the .debs return 404)
+# and bullseye-security is not on archive.debian.org, while the debian:11 image
+# already carries those updated libraries. Build from the last complete bullseye
+# state on snapshot.debian.org instead (checked: security pool intact at this
+# timestamp, pruned by 2026-09-07). Long-term fix: move this image to Debian 12.
+ARG DEBIAN_SNAPSHOT=20260831T211327Z
+
 FROM debian:11 AS builder
 
+ARG DEBIAN_SNAPSHOT
 ENV DEBIAN_FRONTEND=noninteractive
+
+RUN printf '%s\n' \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT} bullseye main" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT} bullseye-updates main" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT} bullseye-security main" \
+        > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources && \
+    printf 'Acquire::Retries "5";\nAcquire::http::Timeout "60";\n' > /etc/apt/apt.conf.d/80-snapshot
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -66,7 +83,16 @@ RUN make && make install && \
 
 FROM debian:11
 
+ARG DEBIAN_SNAPSHOT
 ENV DEBIAN_FRONTEND=noninteractive
+
+RUN printf '%s\n' \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT} bullseye main" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT} bullseye-updates main" \
+        "deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT} bullseye-security main" \
+        > /etc/apt/sources.list && \
+    rm -f /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources && \
+    printf 'Acquire::Retries "5";\nAcquire::http::Timeout "60";\n' > /etc/apt/apt.conf.d/80-snapshot
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
