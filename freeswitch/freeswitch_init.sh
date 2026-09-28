@@ -25,6 +25,16 @@ mkdir -p /usr/local/freeswitch/scripts
 cp    /mnt/freeswitch/conference_cdr.lua /usr/local/freeswitch/scripts/
 # Strip any CR (Windows->VM sync can reintroduce CRLF, which breaks Lua/shell).
 sed -i 's/\r$//' /usr/local/freeswitch/scripts/conference_cdr.lua 2>/dev/null || true
+# The shared logger is bind-mounted read-only from the host, so it keeps whatever
+# mode/line endings the checkout gave it: git stores it non-executable and a
+# Windows sync can add CRLF, and either makes every CDR write fail silently.
+# conference_cdr.lua therefore runs this normalized local copy via bash.
+if [ -f /usr/local/bin/conf_cdr_logger.sh ]; then
+    install -m 0755 /usr/local/bin/conf_cdr_logger.sh /usr/local/freeswitch/scripts/conf_cdr_logger.sh
+    sed -i 's/\r$//' /usr/local/freeswitch/scripts/conf_cdr_logger.sh
+else
+    echo "WARNING: /usr/local/bin/conf_cdr_logger.sh not mounted - conference CDR disabled"
+fi
 # Ensure mod_lua is loaded (it is in the default module set, but guard anyway).
 MODCONF=/usr/local/freeswitch/conf/autoload_configs/modules.conf.xml
 if [ -f "$MODCONF" ] && ! grep -q 'module="mod_lua"' "$MODCONF"; then

@@ -31,7 +31,9 @@
     be determined reliably here - so the redundant column was dropped.)
 ]]--
 
-local LOGGER = "/usr/local/bin/conf_cdr_logger.sh"
+-- Normalized copy of the shared logger made by freeswitch_init.sh; run through
+-- bash so a missing exec bit on the host file cannot break CDR writes.
+local LOGGER = "/bin/bash /usr/local/freeswitch/scripts/conf_cdr_logger.sh"
 local ROOM_PATTERN = "^1%d%d%d$"          -- conference rooms are 1NNR
 
 -- name -> { host, start, active, peak, parts={}, video=bool, members={mid->{cid,join}} }
@@ -53,7 +55,12 @@ local function write_row(rec, host, parts, count, media, start_epoch, dur,
     LOGGER, q(rec), q(host), q(parts), q(count), q(media),
     q(start_epoch), q(dur), q(bridge), q(reason),
   }, " ")
-  os.execute(cmd)
+  -- Lua 5.2 returns true/nil, 5.1 returns the exit status
+  local ok, how, code = os.execute(cmd)
+  if ok ~= true and ok ~= 0 then
+    log("err", string.format("CDR write failed (%s %s): %s",
+          tostring(how), tostring(code or ok), cmd))
+  end
 end
 
 -- Media classification: a negotiated video codec on the member leg means a
