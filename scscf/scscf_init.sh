@@ -77,6 +77,8 @@ export IMS_SLASH_DOMAIN=`echo $IMS_DOMAIN | sed 's/\./\\\./g'`
 
 
 sed -i 's|SCSCF_IP|'$SCSCF_IP'|g' /etc/kamailio_scscf/scscf.cfg
+sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /etc/kamailio_scscf/scscf.cfg
+sed -i 's|ICSCF_IP|'$ICSCF_IP'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|IMS_SLASH_DOMAIN|'$IMS_SLASH_DOMAIN'|g' /etc/kamailio_scscf/scscf.cfg

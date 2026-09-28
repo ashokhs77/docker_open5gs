@@ -76,6 +76,8 @@ fi
 
 
 sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
+sed -i 's|SCSCF_IP|'$SCSCF_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
+sed -i 's|ICSCF_IP|'$ICSCF_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|CDP_LATENCY_THRESHOLD_MS_ENV|'${PCSCF_CDP_LATENCY_THRESHOLD_MS:-10000}'|g' /etc/kamailio_pcscf/pcscf.cfg
 sed -i 's|SCP_IP|'$SCP_IP'|g' /etc/kamailio_pcscf/pcscf.cfg
