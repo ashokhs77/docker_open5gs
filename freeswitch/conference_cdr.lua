@@ -21,11 +21,14 @@
   Conference-Name is exactly the room number). Only those are logged.
 
   Row semantics (matches conf_cdr_logger.sh positional args):
-    LEG  : one per member, written on del-member. Participants = that member,
-           TotalParticipantCount = 1, Duration = that member's join->leave.
-    CONF : one per room, written on conference-destroy. Participants = ';'-joined
-           non-host callers, TotalParticipantCount = peak concurrent members,
+    LEG  : one per member leg (join -> leave). Participants = that member,
+           TotalParticipantCount = 1, Duration = that leg's join->leave.
+    CONF : one per room. Participants = ';'-joined distinct non-host callers,
+           TotalParticipantCount = peak concurrent members,
            Duration = first-join -> destroy.
+    All rows of a room are written together on conference-destroy, so the file
+    shows the CONF row followed by its LEG rows in join order (first joiner
+    first).
     (There is no ConfScope column: since the CDR lives on the bridge's own
     host NIB, every row would be LOCAL, and per-participant origin-NIB cannot
     be determined reliably here - so the redundant column was dropped.)
@@ -98,10 +101,26 @@ local function media_of(c)
   if c.video then return "video" else return "audio" end
 end
 
--- Flush a LEG row for one member.
-local function emit_leg(c, cid, join, now)
-  write_row("LEG", c.host, cid, 1, media_of(c), join, now - join,
-            c.name, "NORMAL")
+-- Record a finished LEG; rows are written together at conference-destroy.
+local function add_leg(c, cid, join, now)
+  table.insert(c.legs, { cid = cid, join = join, dur = now - join })
+end
+
+-- Write one conference's rows as a block. conf_cdr_logger.sh prepends, so the
+-- LEGs go out latest joiner first and the CONF row last: the file then reads
+-- CONF on top followed by its LEGs in join order, first joiner first (longer
+-- leg first on ties).
+local function flush_conf(c, now)
+  table.sort(c.legs, function(a, b)
+    if a.join ~= b.join then return a.join > b.join end
+    return a.dur < b.dur
+  end)
+  for _, l in ipairs(c.legs) do
+    write_row("LEG", c.host, l.cid, 1, media_of(c), l.join, l.dur,
+              c.name, "NORMAL")
+  end
+  write_row("CONF", c.host, table.concat(c.parts, ";"), c.peak, media_of(c),
+            c.start, now - c.start, c.name, "CONF_ENDED")
 end
 
 local con = freeswitch.EventConsumer("CUSTOM", "conference::maintenance")
@@ -123,23 +142,34 @@ while true do
         local c = confs[name]
         if not c then
           c = { name = name, host = cid, start = now, active = 0, peak = 0,
-                parts = {}, video = false, members = {} }
+                parts = {}, seen = {}, video = false, members = {}, legs = {} }
           confs[name] = c
         end
-        c.active = c.active + 1
-        if c.active > c.peak then c.peak = c.active end
         if leg_is_video(e) then c.video = true end
-        if cid ~= c.host then table.insert(c.parts, cid) end
-        if mid then c.members[mid] = { cid = cid, join = now } end
-        log("info", string.format("add room=%s cid=%s mid=%s active=%d peak=%d",
-              name, cid, tostring(mid), c.active, c.peak))
+        if mid and c.members[mid] then
+          -- Repeated add-member for a member already in the room: don't count
+          -- it again or reset its join time.
+          log("info", string.format("add room=%s cid=%s mid=%s already a member, ignored",
+                name, cid, tostring(mid)))
+        else
+          c.active = c.active + 1
+          if c.active > c.peak then c.peak = c.active end
+          -- Participants lists each caller once, even if they rejoin.
+          if cid ~= c.host and not c.seen[cid] then
+            c.seen[cid] = true
+            table.insert(c.parts, cid)
+          end
+          if mid then c.members[mid] = { cid = cid, join = now } end
+          log("info", string.format("add room=%s cid=%s mid=%s active=%d peak=%d",
+                name, cid, tostring(mid), c.active, c.peak))
+        end
 
       elseif action == "del-member" then
         local c = confs[name]
         if c then
           local m = mid and c.members[mid] or nil
           local join = m and m.join or c.start
-          emit_leg(c, cid, join, now)
+          add_leg(c, cid, join, now)
           if mid then c.members[mid] = nil end
           c.active = c.active - 1
           if c.active < 0 then c.active = 0 end
@@ -150,14 +180,12 @@ while true do
       elseif action == "conference-destroy" then
         local c = confs[name]
         if c then
-          -- Defensive: flush LEG rows for any members that never got an
+          -- Defensive: close legs for any members that never got an
           -- explicit del-member (whole-conference teardown).
           for _, m in pairs(c.members) do
-            emit_leg(c, m.cid, m.join, now)
+            add_leg(c, m.cid, m.join, now)
           end
-          local parts = table.concat(c.parts, ";")
-          write_row("CONF", c.host, parts, c.peak, media_of(c), c.start,
-                    now - c.start, name, "CONF_ENDED")
+          flush_conf(c, now)
           log("info", string.format("destroy room=%s host=%s peak=%d dur=%ds",
                 name, c.host, c.peak, now - c.start))
           confs[name] = nil
