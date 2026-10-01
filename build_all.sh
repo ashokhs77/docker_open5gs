@@ -135,7 +135,7 @@ t0=$(date +%s)
 # COMPOSE_BUILD_SERVICES = the services in 4g-volte-deploy.yaml that have a
 # `build:` context (the open5gs/kamailio services use prebuilt images and are
 # NOT built here). Override via env if the compose file changes.
-COMPOSE_BUILD_SERVICES="${COMPOSE_BUILD_SERVICES:-dns rtpengine freeswitch mysql pyhss osmohlr osmomsc mmsc metrics}"
+COMPOSE_BUILD_SERVICES="${COMPOSE_BUILD_SERVICES:-dns rtpengine freeswitch mysql pyhss osmohlr osmomsc mmsc metrics opensips}"
 for svc in $COMPOSE_BUILD_SERVICES; do
     CURRENT_STEP="3/3 docker compose build: $svc"
     banner "    building '$svc' ${COMPOSE_FLAGS:+(no-cache)}"
