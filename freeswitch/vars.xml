@@ -255,7 +255,14 @@
   -->
   <X-PRE-PROCESS cmd="set" data="global_codec_prefs=AMR,AMR-WB,H264,VP8,OPUS,G722,PCMU,PCMA,G729"/>
   <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=AMR,AMR-WB,H264,VP8,OPUS,G722,PCMU,PCMA,G729"/>
-  
+
+  <!-- Audio-only codec prefs (no H264/VP8) for the merge-audio profile. A separate
+       profile is required because the 3pcc participant leg is offered from the
+       PROFILE before the dialplan runs, so public.xml cannot stop it offering video.
+       AMR-WB first, or the handset picks 8 kHz AMR and the 16 kHz room goes
+       narrowband. -->
+  <X-PRE-PROCESS cmd="set" data="merge_audio_codec_prefs=AMR-WB,AMR,G722,OPUS,PCMU,PCMA,G729"/>
+
   <!--
       xmpp_client_profile and xmpp_server_profile
       xmpp_client_profile can be any string.
@@ -419,6 +426,28 @@
   <X-PRE-PROCESS cmd="set" data="internal_sip_port=5090"/>
   <X-PRE-PROCESS cmd="set" data="internal_tls_port=5061"/>
   <X-PRE-PROCESS cmd="set" data="internal_ssl_enable=false"/>
+
+  <!-- merge-call participant profiles: merge-audio.xml (5094) and merge-video.xml
+       (5096), both mounted from ./freeswitch like every other config. They are
+       hand-maintained copies of internal.xml; each file's header lists the handful of
+       lines that differ. 5090 (ordinary calls, the 10XX rooms and the merge FOCUS
+       legs) and 5092 (inter-NIB) are untouched.
+       They exist so enable-3pcc can be set ONLY where the AS's no-SDP b2b_bridge
+       INVITE lands. That flag is set inside those two files, not here, because a
+       sofia param cannot be conditional and putting it on 5090 puts inbound video one
+       participant behind. -->
+  <X-PRE-PROCESS cmd="set" data="merge_audio_auth_calls=false"/>
+  <X-PRE-PROCESS cmd="set" data="merge_audio_sip_port=5094"/>
+  <X-PRE-PROCESS cmd="set" data="merge_audio_tls_port=5095"/>
+  <X-PRE-PROCESS cmd="set" data="merge_audio_ssl_enable=false"/>
+
+  <!-- VIDEO clone. Keeps global_codec_prefs (H264 included) rather than the video-free
+       merge_audio_codec_prefs: that is the only difference between the two profiles
+       beyond their names and ports. -->
+  <X-PRE-PROCESS cmd="set" data="merge_video_auth_calls=false"/>
+  <X-PRE-PROCESS cmd="set" data="merge_video_sip_port=5096"/>
+  <X-PRE-PROCESS cmd="set" data="merge_video_tls_port=5097"/>
+  <X-PRE-PROCESS cmd="set" data="merge_video_ssl_enable=false"/>
 
   <!-- External SIP Profile -->
   <X-PRE-PROCESS cmd="set" data="external_auth_calls=false"/>

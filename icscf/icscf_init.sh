@@ -89,6 +89,14 @@ sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_icscf/icscf.cfg
 sed -i 's|MYSQL_IP|'$MYSQL_IP'|g' /etc/kamailio_icscf/icscf.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_icscf/icscf.cfg
 
+# Trusted source network for relaying in-dialog requests that arrive with an empty
+# route set (see the has_totag block in kamailio_icscf.cfg). Derived from ICSCF_IP so
+# it follows the deployed docker subnet; .env's TEST_NETWORK is not usable here
+# because env_file passes values literally, ${NIB} unexpanded.
+ICSCF_TRUSTED_NET="$(echo ${ICSCF_IP} | cut -d. -f1-3).0/24"
+echo "I-CSCF: trusting ${ICSCF_TRUSTED_NET} as the source of in-dialog requests with no route set"
+sed -i 's|TRUSTED_NET_ENV|'"$ICSCF_TRUSTED_NET"'|g' /etc/kamailio_icscf/kamailio_icscf.cfg
+
 sed -i 's|ICSCF_IP|'$ICSCF_IP'|g' /etc/kamailio_icscf/icscf.xml
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_icscf/icscf.xml
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_icscf/icscf.xml

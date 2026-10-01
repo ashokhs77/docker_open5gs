@@ -93,6 +93,10 @@ sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mo.cfg
 sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/mt.cfg
 sed -i 's|TEST_NETWORK|'$TEST_NETWORK'|g' /etc/kamailio_pcscf/route/register.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_pcscf/route/rtp.cfg
+# RFC 4028 cap for outgoing initial INVITEs. Refresh fires at HALF this value, so
+# lower it (e.g. 120) to test session timers in minutes. Keep above Min-SE (90).
+sed -i 's|SESSION_EXPIRES_MAX_ENV|'${PCSCF_SESSION_EXPIRES_MAX:-1800}'|g' /etc/kamailio_pcscf/route/mo.cfg
+sed -i 's|SESSION_EXPIRES_MAX_ENV|'${PCSCF_SESSION_EXPIRES_MAX:-1800}'|g' /etc/kamailio_pcscf/route/mt.cfg
 # Deployed PLMN, for the network-ringback condition in route/mo.cfg.
 sed -i 's|RBT_PLMN_ENV|'${MCC}${MNC}'|g' /etc/kamailio_pcscf/route/mo.cfg
 

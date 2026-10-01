@@ -124,6 +124,66 @@
             </ApplicationServer>
         </InitialFilterCriteria> -->
 
+        <!-- MMTel conference AS (B2BUA anchor) in-path on BOTH legs, mirroring the proven
+             OpenSIPS-TAS iFC pattern: ;call=orig / ;call=term rides in the Route so the AS
+             knows the leg, no explicit port (resolved via the _sip SRV record for "opensips"),
+             DefaultHandling=0 (call proceeds if the AS is down). The AS must own BOTH the
+             orig (caller) and term (callee) dialogs so it can re-anchor B at merge. -->
+
+        <!-- ORIGINATING (SessionCase=0) -->
+        <InitialFilterCriteria>
+            <Priority>30</Priority>
+            <TriggerPoint>
+                <ConditionTypeCNF>0</ConditionTypeCNF>
+                <SPT>
+                    <ConditionNegated>0</ConditionNegated>
+                    <Group>0</Group>
+                    <Method>INVITE</Method>
+                </SPT>
+                <SPT>
+                    <Group>0</Group>
+                    <SessionCase>0</SessionCase>
+                </SPT>
+            </TriggerPoint>
+            <ApplicationServer>
+                <ServerName>sip:opensips.ims.mnc{{ iFC_vars['mnc'] }}.mcc{{ iFC_vars['mcc'] }}.3gppnetwork.org;call=orig</ServerName>
+                <DefaultHandling>0</DefaultHandling>
+            </ApplicationServer>
+        </InitialFilterCriteria>
+
+        <!-- TERMINATING (SessionCase=1), inter-NIB inbound ONLY. X-Fallback-Origin is added by
+             the caller's S-CSCF (route FINAL_TERM) when it dispatches to another NIB, so local
+             calls never match; they are already anchored by the caller's orig iFC. Without
+             this the callee's AS never sees the call, and merging it here fails with
+             "Could not find entity". No loop: b2b does not copy X-Fallback-Origin onto the
+             leg it regenerates (not in custom_headers). -->
+        <InitialFilterCriteria>
+            <Priority>31</Priority>
+            <TriggerPoint>
+                <ConditionTypeCNF>1</ConditionTypeCNF>
+                <SPT>
+                    <ConditionNegated>0</ConditionNegated>
+                    <Group>0</Group>
+                    <Method>INVITE</Method>
+                </SPT>
+                <SPT>
+                    <ConditionNegated>0</ConditionNegated>
+                    <Group>1</Group>
+                    <SIPHeader>
+                        <Header>X-Fallback-Origin</Header>
+                    </SIPHeader>
+                </SPT>
+                <SPT>
+                    <ConditionNegated>0</ConditionNegated>
+                    <Group>2</Group>
+                    <SessionCase>1</SessionCase>
+                </SPT>
+            </TriggerPoint>
+            <ApplicationServer>
+                <ServerName>sip:opensips.ims.mnc{{ iFC_vars['mnc'] }}.mcc{{ iFC_vars['mcc'] }}.3gppnetwork.org;call=term</ServerName>
+                <DefaultHandling>0</DefaultHandling>
+            </ApplicationServer>
+        </InitialFilterCriteria>
         <!-- SIP INVITE Traffic from Registered Sub-->
         <!-- <InitialFilterCriteria>
             <Priority>30</Priority>

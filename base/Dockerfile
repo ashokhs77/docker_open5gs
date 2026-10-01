@@ -82,7 +82,7 @@ RUN ldconfig
 # cache and builder layers small.
 RUN git init open5gs && cd open5gs && \
     git remote add origin https://github.com/ashokhs77/open5gs && \
-    git fetch --depth 1 origin d6cce54d43c672d6b54e281f90293ede4c3b1fcc && \
+    git fetch --depth 1 origin e08b4bd503cfcd5f5abd23cfae8415d2bf96503d && \
     git checkout FETCH_HEAD && \
     git submodule update --init --recursive --depth 1 && \
     if [ "$LICENSE" = "OFF" ]; then \

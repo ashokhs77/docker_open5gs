@@ -1,7 +1,7 @@
 FROM ubuntu:jammy AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ARG FREESWITCH_COMMIT=dd23170bb1608f9840d3e006f68c57bee0812c3e
+ARG FREESWITCH_COMMIT=23e50fd0a8976641dc67fd1ef2b39e027248d76c
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     autoconf \

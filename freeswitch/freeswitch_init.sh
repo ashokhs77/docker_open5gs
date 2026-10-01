@@ -41,6 +41,32 @@ if [ -f "$MODCONF" ] && ! grep -q 'module="mod_lua"' "$MODCONF"; then
     sed -i 's#</modules>#  <load module="mod_lua"/>\n</modules>#' "$MODCONF"
 fi
 
+# merge-call participant profiles: audio on 5094, video on 5096. Plain copies of
+# internal.xml maintained by hand (each file's header lists the few lines that differ).
+# They exist so that enable-3pcc lives ONLY where the AS's no-SDP b2b_bridge INVITE
+# lands: on internal/5090 that flag put inbound video one participant behind.
+cp    /mnt/freeswitch/merge-audio.xml /usr/local/freeswitch/conf/sip_profiles
+cp    /mnt/freeswitch/merge-video.xml /usr/local/freeswitch/conf/sip_profiles
+
+# A merge profile that lost enable-3pcc answers the bridge INVITE with 480
+# MANDATORY_IE_MISSING and NOTHING else looks wrong, so check it at boot instead of
+# during a call. Commented out or absent both fail this test.
+for P in merge-audio merge-video; do
+	if ! grep -q '^[[:space:]]*<param name="enable-3pcc" value="true"/>' \
+	     "/usr/local/freeswitch/conf/sip_profiles/${P}.xml"; then
+		echo "[merge] FATAL: ${P}.xml has no active enable-3pcc=true -- every merge would 480" >&2
+		exit 1
+	fi
+done
+# The converse: internal.xml must NOT have it, or plain inbound video goes one
+# participant behind (measured 2026-08-25 on the 10XX dial-in).
+if grep -q '^[[:space:]]*<param name="enable-3pcc"' \
+   /usr/local/freeswitch/conf/sip_profiles/internal.xml; then
+	echo "[merge] FATAL: internal.xml has an active enable-3pcc -- this breaks plain inbound video; it belongs on merge-audio/merge-video only" >&2
+	exit 1
+fi
+echo "[merge] merge-audio (5094) and merge-video (5096) installed, 3pcc confined to them"
+
 sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /usr/local/freeswitch/conf/autoload_configs/acl.conf.xml
 sed -i 's|RTPENGINE_IP|'$RTPENGINE_IP'|g' /usr/local/freeswitch/conf/vars.xml
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /usr/local/freeswitch/conf/vars.xml

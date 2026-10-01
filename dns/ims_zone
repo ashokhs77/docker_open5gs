@@ -14,10 +14,6 @@ pcscf                   1D IN A         PCSCF_IP
 _sip._udp.pcscf         1D SRV 0 0 5060 pcscf
 _sip._tcp.pcscf         1D SRV 0 0 5060 pcscf
 
-; Conference-factory ingress resolves to the P-CSCF, which rewrites the R-URI to
-; a local conference room and dispatches it to FreeSWITCH (see FSDISPATCH).
-conf-factory            1D IN A         PCSCF_IP
-
 icscf                   1D IN A         ICSCF_IP
 _sip._udp               1D SRV 0 0 4060 icscf
 _sip._tcp               1D SRV 0 0 4060 icscf
@@ -39,6 +35,14 @@ _sip._tcp.ibcf          1D SRV 0 0 5090 ibcf
 voicemail               1D IN A         IBCF_IP
 _sip._udp.voicemail     1D SRV 0 0 5090 voicemail
 _sip._tcp.voicemail     1D SRV 0 0 5090 voicemail
+
+conf-factory            1D IN A         OPENSIPS_IP
+_sip._udp.conf-factory  1D SRV 0 0 5060 conf-factory
+_sip._tcp.conf-factory  1D SRV 0 0 5060 conf-factory
+
+opensips                1D IN A         OPENSIPS_IP
+_sip._udp.opensips      1D SRV 0 0 5060 opensips
+_sip._tcp.opensips      1D SRV 0 0 5060 opensips
 
 @ 1D IN NAPTR 100 10 "s" "SIP+D2T" "" _sip._tcp.IMS_DOMAIN.
 @ 1D IN NAPTR 100 10 "s" "SIP+D2U" "" _sip._udp.IMS_DOMAIN.

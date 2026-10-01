@@ -56,31 +56,95 @@
       </condition>
     </extension>
 
-    <extension name="from_kamailio_pcscf">
-      <condition field="network_addr" expression="^172\.22\.0\.21$" />
-      <condition field="destination_number" expression="^(.+)$">
-        <action application="transfer" data="$1 XML default"/>
+    <!-- OpenSIPS-AS merge-call rooms. Media type follows the initiator's call:
+         audio -> conf-/confp- (wideband), video -> confv-/confpv- (video-mcu).
+
+         NOTHING HERE CONTROLS THE PARTICIPANT (confp-) OFFER: that leg is 3pcc, so
+         FreeSWITCH offers from the SOFIA PROFILE before this dialplan runs (audio
+         merges therefore use the audio-only merge-audio profile on 5094). The
+         codec/video lines below only affect the conf- focus leg. -->
+    <extension name="as_conf_focus">
+      <condition field="destination_number" expression="^conf-([^;@]+)(?:;.*)?$">
+        <!-- isfocus (RFC 4579): the B2BUA copies this Contact param to the caller
+             so the handset treats the dialog as a conference focus and sends REFERs. -->
+        <action application="export" data="sip_contact_params=isfocus"/>
+        <!-- AMR-WB first to match the 16 kHz wideband room. No "@20k" suffix:
+             modifiers are @<rate>h/@<ptime>i/@<bitrate>b, and an unparseable one
+             silently drops the whole AMR entry, leaving PCMU 8 kHz. -->
+        <action application="set" data="absolute_codec_string=AMR-WB,AMR,PCMU,PCMA"/>
+        <action application="set" data="sip_exclude_video=true"/>
+        <action application="answer"/>
+        <!-- 16 kHz audio room. +flags{endconf}: only the creator (UE-A) enters
+             here; when A leaves, the whole room tears down. -->
+        <action application="conference" data="merge-$1@wideband+flags{endconf}"/>
       </condition>
     </extension>
 
-<!--	  
-    <extension name="from_kamailio">
-      <condition field="network_addr" expression="^172\.22\.0\.21$" />
-      <condition field="destination_number" expression="^(.+)$">
-        <action application="set" data="destination_number=3000"/>
-        <action application="transfer" data="${destination_number} XML default"/>
+    <!-- Re-anchored AUDIO participants (B/C): AS bridges their EXISTING dialog
+         into the same room via a 3pcc bridge INVITE to confp-<tag>. Same
+         merge-<tag> room as the creator, WITHOUT endconf. -->
+    <extension name="as_conf_participant">
+      <condition field="destination_number" expression="^confp-([^;@]+)(?:;.*)?$">
+        <action application="set" data="absolute_codec_string=AMR-WB,AMR,PCMU,PCMA"/>
+        <action application="set" data="sip_exclude_video=true"/>
+        <action application="answer"/>
+        <action application="conference" data="merge-$1@wideband"/>
       </condition>
     </extension>
-    -->
-<!--	  
-    <extension name="from_kamailio">
-      <condition field="network_addr" expression="^172\.22\.0\.21$" />
-      <condition field="destination_number" expression="^(.+)$">
-        <action application="set" data="destination_number=3000"/>
-        <action application="transfer" data="${destination_number} XML default"/>
+
+    <!-- VIDEO merge. video-mcu-stereo-720 = 720x1280 portrait canvas (every member
+         is a handset), not the 1080p/1mb video-mcu-stereo. Focus and participant
+         MUST stay on the same profile: the room's canvas comes from whichever
+         member created it, so a mismatch silently picks one at random. -->
+    <extension name="as_conf_focus_video">
+      <condition field="destination_number" expression="^confv-([^;@]+)(?:;.*)?$">
+        <action application="export" data="sip_contact_params=isfocus"/>
+        <action application="set" data="absolute_codec_string=AMR-WB,AMR,PCMU,PCMA,H264"/>
+        <action application="answer"/>
+        <action application="conference" data="merge-$1@video-mcu-stereo-720+flags{endconf}"/>
       </condition>
     </extension>
--->
+
+    <extension name="as_conf_participant_video">
+      <condition field="destination_number" expression="^confpv-([^;@]+)(?:;.*)?$">
+        <action application="set" data="absolute_codec_string=AMR-WB,AMR,PCMU,PCMA,H264"/>
+        <action application="answer"/>
+        <action application="conference" data="merge-$1@video-mcu-stereo-720"/>
+      </condition>
+    </extension>
+
+    <!-- JOINING focus (confj-/confjv-). Merge is not the initiator's privilege: a
+         participant can add a party too, and its handset dials the same factory. The
+         AS spots that the caller is already in a room and sends its focus HERE, to
+         that room, instead of opening a second one and trunking the two together
+         (that cascade goes deaf: FreeSWITCH ends up on both ends of the trunk with
+         no rtpengine between them, so one end runs SRTP and the other plain RTP).
+
+         isfocus like conf-/confv- so the handset renders the conference and sends
+         REFERs, but deliberately WITHOUT endconf: the room belongs to whoever
+         created it, and a joiner hanging up must not tear it down for everyone.
+
+         Same room name (merge-$1) and same profile as the extension that created
+         it, because a mismatched profile silently picks a canvas at random. -->
+    <extension name="as_conf_join_focus">
+      <condition field="destination_number" expression="^confj-([^;@]+)(?:;.*)?$">
+        <action application="export" data="sip_contact_params=isfocus"/>
+        <action application="set" data="absolute_codec_string=AMR-WB,AMR,PCMU,PCMA"/>
+        <action application="set" data="sip_exclude_video=true"/>
+        <action application="answer"/>
+        <action application="conference" data="merge-$1@wideband"/>
+      </condition>
+    </extension>
+
+    <extension name="as_conf_join_focus_video">
+      <condition field="destination_number" expression="^confjv-([^;@]+)(?:;.*)?$">
+        <action application="export" data="sip_contact_params=isfocus"/>
+        <action application="set" data="absolute_codec_string=AMR-WB,AMR,PCMU,PCMA,H264"/>
+        <action application="answer"/>
+        <action application="conference" data="merge-$1@video-mcu-stereo-720"/>
+      </condition>
+    </extension>
+
     <!--
 	You can place files in the public directory to get included.
     -->

@@ -27,7 +27,6 @@
 FROM debian:bookworm AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV DEB_BUILD_PROFILES="pkg.ngcp-rtpengine.nobcg729"
 
 RUN sed -i 's/Components: main/Components: main contrib non-free/g' /etc/apt/sources.list.d/debian.sources
 
@@ -43,6 +42,7 @@ RUN apt-get update && \
         gperf \
         iproute2 \
         iptables \
+        libbcg729-dev \
         iputils-ping \
         libavcodec-dev \
         libavcodec-extra \
@@ -93,11 +93,30 @@ RUN apt-get update && \
         pandoc \
         python3-websockets \
         systemd \
+        wget \
+        unzip \
+        patch \
+        ca-certificates \
         zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
-RUN git clone --depth 1 --branch mr26.0 https://github.com/sipwise/rtpengine /src/rtpengine && \
-    cd /src/rtpengine && \
+RUN git clone --depth 1 --branch mr26.0 https://github.com/sipwise/rtpengine /src/rtpengine
+
+# --- EVS: fetch 3GPP/ETSI reference source, apply rtpengine's patch, build lib3gpp-evs.so
+RUN mkdir -p /tmp/evs && cd /tmp/evs && \
+    wget -q -U "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36" \
+        https://www.etsi.org/deliver/etsi_ts/126400_126499/126443/17.00.00_60/ts_126443v170000p0.zip && \
+    unzip -qq ts_126443v170000p0.zip && \
+    cd ./c-code && \
+    patch -p1 < /src/rtpengine/evs/etsi-ts-126.443-3gpp-ts-26.443-v17.0.0/patch && \
+    chmod +r ./lib_*/*.h && \
+    mkdir -p /usr/include/3gpp-evs && \
+    cp --target-directory=/usr/include/3gpp-evs ./lib_*/*.h && \
+    DEBUG=0 RELEASE=1 make && \
+    mkdir -p /evs-lib && \
+    cp ./lib3gpp-evs.so /evs-lib/lib3gpp-evs.so
+
+RUN cd /src/rtpengine && \
     dpkg-checkbuilddeps && \
     export DEB_BUILD_OPTIONS=nocheck && \
     dpkg-buildpackage -b -uc -us && \
@@ -111,29 +130,32 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN sed -i 's/Components: main/Components: main contrib non-free/g' /etc/apt/sources.list.d/debian.sources
 
 COPY --from=builder /rtpengine-debs /tmp/rtpengine-debs
+# --- EVS: pull the built lib in from the builder stage
+COPY --from=builder /evs-lib/lib3gpp-evs.so /usr/local/lib/rtpengine/lib3gpp-evs.so
 
 RUN apt-get update && \
     debs="$(find /tmp/rtpengine-debs -maxdepth 1 -type f \( -name 'ngcp-rtpengine-daemon_*.deb' -o -name 'ngcp-rtpengine-iptables_*.deb' -o -name 'ngcp-rtpengine-utils_*.deb' \) -print)" && \
     test -n "$debs" && \
     apt-get -y install --no-install-recommends \
+        libavcodec-extra \
+        libbcg729-0 \
         iproute2 \
         iptables \
         iputils-ping \
         kmod \
-        libavcodec-extra \
-        libopencore-amrnb0 \
-        libopencore-amrwb0 \
-        libopus0 \
-        libvo-amrwbenc0 \
         net-tools \
         netcat-openbsd \
         nftables \
         procps \
         $debs && \
     ldconfig && \
-    rtpengine --codecs | grep -q 'AMR' && \
-    rtpengine --codecs | grep -q 'AMR-WB' && \
     rm -rf /tmp/rtpengine-debs /var/lib/apt/lists/* /root/.cache /tmp/*
+
+# --- EVS: point rtpengine at the built lib
+
+RUN mkdir -p /etc/rtpengine && \
+    sed -i '/^\[rtpengine\]/a evs-lib-path = /usr/local/lib/rtpengine/lib3gpp-evs.so' \
+        /etc/rtpengine/rtpengine.conf
 
 CMD ["/mnt/rtpengine/rtpengine_init.sh"]
 

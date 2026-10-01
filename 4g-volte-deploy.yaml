@@ -314,6 +314,12 @@ services:
       - "5090/udp" 
       - "5092:5092/tcp"
       - "5092:5092/udp"
+      # merge-call 3pcc participant profiles (see vars.xml). Separate from 5090
+      # because enable-3pcc breaks ordinary with-SDP inbound video on that profile.
+      - "5094/tcp"
+      - "5094/udp"
+      - "5096/tcp"
+      - "5096/udp"
       - "5066/tcp"
     networks:
       default:
@@ -431,6 +437,47 @@ services:
     networks:
       default:
         ipv4_address: ${SCSCF_IP}
+  opensips:
+    # OpenSIPS 4.0 in-path MMTel/conference B2BUA anchor (Option 3 / seamless
+    # re-anchor merge). Built from source in ./opensips/Dockerfile (git checkout
+    # 4.0.0), mirroring how the repo builds kamailio/open5gs.
+    # STAGE 1: anchor normal calls only; GATE = normal A->B audio+video clean
+    # (PRACK/preconditions/feature tags intact, no 408/481) before merge logic.
+    # Rollback to the Kamailio-AS focus: revert this block to image docker_kamailio
+    # + entrypoint /mnt/as/as_init.sh, and comment the Priority-30 iFC in pyhss.
+    build:
+      context: ./opensips
+      dockerfile: Dockerfile
+    image: docker_opensips_as
+    container_name: opensips
+    dns: ${DNS_IP}
+    # NET_ADMIN: opensips_init.sh installs a container-local DNAT rule redirecting
+    # DOCKER_HOST_IP:6060 (the S-CSCF's ADVERTISED address, present in Record-Route)
+    # to SCSCF_IP:6060. Without it, AS->hostIP traffic hairpins through Docker NAT,
+    # the source becomes 172.22.1.1, and the S-CSCF then routes all responses to
+    # 172.22.1.1:5060 which the host forwards to the P-CSCF -- so the AS never sees
+    # 200 OKs for its in-dialog requests (BYE storm / video-switch 408).
+    cap_add:
+      - NET_ADMIN
+    entrypoint: ["/bin/bash", "-c", "/mnt/opensips/opensips_init.sh"]
+    volumes:
+      - ./opensips:/mnt/opensips
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=opensips
+    depends_on:
+      - dns
+      - scscf
+      - freeswitch
+    expose:
+      - "5060/udp"
+      - "5060/tcp"
+    networks:
+      default:
+        ipv4_address: ${OPENSIPS_IP}
   pcscf:
     image: docker_kamailio
     container_name: pcscf
