@@ -137,6 +137,13 @@ sleep 2
 python3 /etc/mmsc/location_listener.py &
 sleep 1
 
+# 5G SA only: Kannel's HTTP smsc (kannel_5g.conf) hands MMS notifications to this
+# helper, which delivers them as WAP-push SMS through the SMSC over IMS.
+if [ "${DEPLOY_MODE:-}" = "5G" ]; then
+    python3 /etc/mmsc/wap_push_helper.py &
+    sleep 1
+fi
+
 # Start Kannel bearerbox
 echo "Starting Kannel bearerbox..."
 /usr/local/kannel/sbin/bearerbox -v 2 /tmp/kannel.conf &

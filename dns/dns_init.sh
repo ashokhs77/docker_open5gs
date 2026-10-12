@@ -31,6 +31,7 @@ cp /mnt/dns/ims_zone /etc/bind
 cp /mnt/dns/pub_3gpp_zone /etc/bind
 cp /mnt/dns/e164.arpa /etc/bind
 cp /mnt/dns/named.conf /etc/bind
+cp /mnt/dns/mmsc_zone /etc/bind
 
 [ ${#MNC} == 3 ] && EPC_DOMAIN="epc.mnc${MNC}.mcc${MCC}.3gppnetwork.org" || EPC_DOMAIN="epc.mnc0${MNC}.mcc${MCC}.3gppnetwork.org"
 [ ${#MNC} == 3 ] && IMS_DOMAIN="ims.mnc${MNC}.mcc${MCC}.3gppnetwork.org" || IMS_DOMAIN="ims.mnc0${MNC}.mcc${MCC}.3gppnetwork.org"
@@ -54,6 +55,8 @@ sed -i 's|OPENSIPS_IP|'$OPENSIPS_IP'|g' /etc/bind/ims_zone
 sed -i 's|PUB_3GPP_DOMAIN|'$PUB_3GPP_DOMAIN'|g' /etc/bind/pub_3gpp_zone
 sed -i 's|DNS_IP|'$DNS_IP'|g' /etc/bind/pub_3gpp_zone
 sed -i 's|ENTITLEMENT_SERVER_IP|'$ENTITLEMENT_SERVER_IP'|g' /etc/bind/pub_3gpp_zone
+sed -i 's|DNS_IP|'$DNS_IP'|g' /etc/bind/mmsc_zone
+sed -i 's|MMSC_IP|'$MMSC_IP'|g' /etc/bind/mmsc_zone
 
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/bind/e164.arpa
 sed -i 's|DNS_IP|'$DNS_IP'|g' /etc/bind/e164.arpa

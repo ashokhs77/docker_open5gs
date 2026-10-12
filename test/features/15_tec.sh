@@ -192,10 +192,10 @@ run_tec_tests() {
         if tec_report_has_pass "$conf_report" "UE audio conference (complete path)" && \
            tec_report_has_pass "$conf_report" "Distinct complete-path conferences isolated"; then
             pass "TEC conference infrastructure: complete-path multi-member and distinct-room (CDR-verified) conference evidence present"
-            tec_matrix_add "T3/B3285" "Conference/merge" "conference" "partial" "Complete-path conferences (register→P-CSCF→FS) with N-in-N CDR verified; real UE REFER/Replaces merge still manual" "Add real-UE 4-party merge (REFER/Replaces)"
+            tec_matrix_add "T3/B3285" "Conference/merge" "conference" "partial" "Complete-path conferences (register→P-CSCF→FS) with N-in-N CDR verified; REFER/Replaces merge is covered with simulated UEs by --feature call_merge; real-handset merge still manual" "Add real-UE 4-party merge (REFER/Replaces)"
         else
             fail "TEC conference infrastructure evidence missing" "Conference report lacks complete-path multi-member or distinct-room conference pass"
-            tec_matrix_add "T3/B3285" "Conference/merge" "conference" "fail" "conference automation incomplete" "Fix conference feature and enable conf-factory routing"
+            tec_matrix_add "T3/B3285" "Conference/merge" "conference" "fail" "conference automation incomplete" "Fix conference feature"
         fi
     fi
 

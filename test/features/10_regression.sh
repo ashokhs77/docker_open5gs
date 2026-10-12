@@ -236,7 +236,7 @@ emit_ims_failure_context() {
 
 emit_pcscf_conference_dial_context() {
     local testcase="$1"
-    append_report_block "${testcase} conference diagnostics" "Call merge diagnostics intentionally not ported into this BuildTestSuite version"
+    append_report_block "${testcase} conference diagnostics" "Call merge diagnostics live in the dedicated feature: --feature call_merge"
 }
 
 emit_media_context() {
@@ -1284,7 +1284,7 @@ print(json.dumps({'attach': ok_a, 'register': ok_r, 'error': err}))
         fi
     fi
 
-    if should_run_test 34 || should_run_test 35 || should_run_test 36; then
+    if should_run_test 34 || should_run_test 35; then
         reset_freeswitch_test_state "Pre-supplemental"
         log "Pre-supplemental: restarting MME to clear stale NAS security contexts..."
         docker restart mme >/dev/null 2>&1 || true
@@ -1299,7 +1299,7 @@ print(json.dumps({'attach': ok_a, 'register': ok_r, 'error': err}))
         if mme_s1ap_ready; then
             log "Pre-supplemental: MME S1AP ready after ${mme_wait}s — probing S6a+PFCP end-to-end..."
             # Same S6a timing issue as Pre-E2E: probe actual UE attach before
-            # TC-34/TC-35 supplemental services run in this build; TC-36 call merge is intentionally skipped.
+            # TC-34/TC-35 supplemental services run in this build; call merge has its own feature (call_merge).
             mme_epc_probe "Pre-supplemental EPC" 10 8
         else
             log "Pre-supplemental: WARNING — MME S1AP not ready after 20s, supplemental service tests may fail"
@@ -1653,12 +1653,11 @@ finally:
         fi
     fi
 
-    # TC-36: Supplemental service realism - 3-way merge via conf-factory + REFER/Replaces
+    # TC-36 is retired: 3-way merge is tested by the dedicated feature call_merge
+    # (features/30_call_merge.sh). The number is consumed without reporting anything so
+    # that TC-37 and later keep their numbers - they are referenced by number in the
+    # gates below, in other features' messages and in the guides.
     _TEST_NUM=$((_TEST_NUM + 1))
-    if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: VoLTE 3-way merge (hold + second call + conf-factory + REFER)"
-        skip "VoLTE 3-way merge" "Call merge test intentionally not ported into this BuildTestSuite version"
-    fi
 
     # ─── Cat 8: EPC Mobility & Security ──────────────────────────────────────
     # Pre-Cat8: TC-34/35 can leave NAS contexts, PFCP sessions, and SGW/SMF

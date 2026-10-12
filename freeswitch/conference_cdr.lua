@@ -18,7 +18,25 @@
 
   Rooms are the conference numbers 1NNR (see freeswitch/default.xml
   `optimus_conferences_1xxx`, which runs `conference <1NNR>@<profile>`, so the
-  Conference-Name is exactly the room number). Only those are logged.
+  Conference-Name is exactly the room number).
+
+  Merge conferences (handset "Merge" via the OpenSIPS AS) are logged too. Their
+  room is `merge-<tag>` (freeswitch/public.xml: conf-/confp-/confv-/confpv-/
+  confj-/confjv- all run `conference merge-<tag>@...`), <tag> being the
+  initiator's focus from-tag, so the name is unique per conference and is what
+  the Bridge column shows. The initiator's focus leg is the first member, hence
+  the Host. A merged party reaches the room on a leg the AS creates, and on that
+  leg FreeSWITCH's caller number is the ORIGINAL CALLER of the absorbed call
+  (measured 2026-10-07: A merges B and C -> all three legs showed A), so for
+  merge rooms the member is taken from the leg's From user instead - the same
+  identity the AS uses to find a member (opensips/mi_drop.sh).
+  A participant that itself pressed Merge is in the room on two legs for a
+  moment (its old participant leg and its own new focus leg, swapped by the AS).
+  That swap is folded: while a number still has a leg in a merge room, a further
+  leg of the same number is a continuation - one LEG row from its first join to
+  its last leave, and it counts once towards the peak. A real rejoin (left, came
+  back later) still gives two LEG rows. Dial-in rooms are not folded.
+  Nothing else is logged.
 
   Row semantics (matches conf_cdr_logger.sh positional args):
     LEG  : one per member leg (join -> leave). Participants = that member,
@@ -37,7 +55,12 @@
 -- Normalized copy of the shared logger made by freeswitch_init.sh; run through
 -- bash so a missing exec bit on the host file cannot break CDR writes.
 local LOGGER = "/bin/bash /usr/local/freeswitch/scripts/conf_cdr_logger.sh"
-local ROOM_PATTERN = "^1%d%d%d$"          -- conference rooms are 1NNR
+local ROOM_PATTERN  = "^1%d%d%d$"         -- dial-in conference rooms are 1NNR
+local MERGE_PATTERN = "^merge%-[%w]+$"    -- merge conferences: merge-<focus from-tag>
+
+local function is_logged_room(name)
+  return name:match(ROOM_PATTERN) ~= nil or name:match(MERGE_PATTERN) ~= nil
+end
 
 -- name -> { host, start, active, peak, parts={}, video=bool, members={mid->{cid,join}} }
 local confs = {}
@@ -97,6 +120,26 @@ local function leg_is_video(e)
   return false
 end
 
+-- Who is on this leg. Dial-in rooms: the caller number, as always. Merge rooms:
+-- the From user of the leg (see header), falling back to the caller number.
+local function member_number(e, name)
+  local cid = e:getHeader("Caller-Caller-ID-Number") or e:getHeader("Caller-ANI")
+              or "unknown"
+  if not name:match(MERGE_PATTERN) then return cid end
+  local user = e:getHeader("variable_sip_from_user")
+  if not _truthy(user) then
+    local uuid = e:getHeader("Caller-Unique-ID") or e:getHeader("Unique-ID")
+    if uuid and uuid ~= "" then
+      user = freeswitch.API():execute("uuid_getvar", uuid .. " sip_from_user")
+    end
+  end
+  if _truthy(user) and not tostring(user):match("^%-ERR") then
+    user = tostring(user):gsub("%s+$", "")
+    if user ~= "" then return user end
+  end
+  return cid
+end
+
 local function media_of(c)
   if c.video then return "video" else return "audio" end
 end
@@ -125,24 +168,25 @@ end
 
 local con = freeswitch.EventConsumer("CUSTOM", "conference::maintenance")
 log("info", "started; logging conference rooms matching " .. ROOM_PATTERN
-             .. " via " .. LOGGER)
+             .. " and " .. MERGE_PATTERN .. " via " .. LOGGER)
 
 while true do
   local e = con:pop(1)                     -- block up to 1s for the next event
   if e then
     local action = e:getHeader("Action")
     local name = e:getHeader("Conference-Name")
-    if action and name and name:match(ROOM_PATTERN) then
+    if action and name and is_logged_room(name) then
       local mid = e:getHeader("Member-ID")
-      local cid = e:getHeader("Caller-Caller-ID-Number")
-                  or e:getHeader("Caller-ANI") or "unknown"
+      local cid = member_number(e, name)
       local now = os.time()
 
       if action == "add-member" then
         local c = confs[name]
         if not c then
           c = { name = name, host = cid, start = now, active = 0, peak = 0,
-                parts = {}, seen = {}, video = false, members = {}, legs = {} }
+                parts = {}, seen = {}, video = false, members = {}, legs = {},
+                -- merge rooms: number -> { join = first join, n = legs in room }
+                fold = name:match(MERGE_PATTERN) ~= nil, present = {} }
           confs[name] = c
         end
         if leg_is_video(e) then c.video = true end
@@ -151,7 +195,15 @@ while true do
           -- it again or reset its join time.
           log("info", string.format("add room=%s cid=%s mid=%s already a member, ignored",
                 name, cid, tostring(mid)))
+        elseif c.fold and c.present[cid] then
+          -- Same number already has a leg here: the AS is swapping its legs.
+          local p = c.present[cid]
+          p.n = p.n + 1
+          if mid then c.members[mid] = { cid = cid, join = p.join } end
+          log("info", string.format("add room=%s cid=%s mid=%s further leg of a member (%d legs), folded",
+                name, cid, tostring(mid), p.n))
         else
+          if c.fold then c.present[cid] = { join = now, n = 1 } end
           c.active = c.active + 1
           if c.active > c.peak then c.peak = c.active end
           -- Participants lists each caller once, even if they rejoin.
@@ -169,12 +221,26 @@ while true do
         if c then
           local m = mid and c.members[mid] or nil
           local join = m and m.join or c.start
-          add_leg(c, cid, join, now)
+          -- The number noted at join time: at leave the channel may be gone.
+          local who = (m and m.cid) or cid
+          local p = c.fold and c.present[who] or nil
           if mid then c.members[mid] = nil end
-          c.active = c.active - 1
-          if c.active < 0 then c.active = 0 end
-          log("info", string.format("del room=%s cid=%s dur=%ds active=%d",
-                name, cid, now - join, c.active))
+          if p and p.n > 1 then
+            -- One of several legs of this number left; the member is still here.
+            p.n = p.n - 1
+            log("info", string.format("del room=%s cid=%s one leg of a member left (%d remain), folded",
+                  name, who, p.n))
+          else
+            if p then
+              join = p.join
+              c.present[who] = nil
+            end
+            add_leg(c, who, join, now)
+            c.active = c.active - 1
+            if c.active < 0 then c.active = 0 end
+            log("info", string.format("del room=%s cid=%s dur=%ds active=%d",
+                  name, who, now - join, c.active))
+          end
         end
 
       elseif action == "conference-destroy" then
@@ -183,7 +249,13 @@ while true do
           -- Defensive: close legs for any members that never got an
           -- explicit del-member (whole-conference teardown).
           for _, m in pairs(c.members) do
-            add_leg(c, m.cid, m.join, now)
+            if not c.fold then
+              add_leg(c, m.cid, m.join, now)
+            elseif c.present[m.cid] then
+              -- one row per number, however many legs it still has
+              add_leg(c, m.cid, c.present[m.cid].join, now)
+              c.present[m.cid] = nil
+            end
           end
           flush_conf(c, now)
           log("info", string.format("destroy room=%s host=%s peak=%d dur=%ds",

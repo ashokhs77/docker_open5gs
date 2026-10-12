@@ -13,24 +13,18 @@
 # SIPp clients from TEST_NETWORK are accepted by the P-CSCF WITH_SIPP_TEST bypass.
 #
 # Tests:
-#   TC-1:  DNS conf-factory resolution (infra)
-#   TC-2:  1-UE audio VoNR conference — COMPLETE path (room 1010)
-#   TC-3:  P-CSCF VoNR conf-factory routing (P-CSCF-side; gated on conf-factory DNS)
-#   TC-4:  1-UE video ViNR conference — COMPLETE path (room 1011)
-#   TC-5:  P-CSCF video conf-factory routing (P-CSCF-side; gated on conf-factory DNS)
-#   TC-6:  Sequential conf-factory rooms (P-CSCF-side; gated on conf-factory DNS)
-#   TC-7:  4-UE audio VoNR conference — COMPLETE path (room 1012)
-#   TC-8:  Hold SDP via conf-factory (P-CSCF-side; gated on conf-factory DNS)
-#   TC-9:  Conference room reuse — COMPLETE path (room 1013 → 2 CDR rows)
-#   TC-10: Distinct conference rooms + CDR isolation — COMPLETE path (rooms 1014, 1015)
-#   TC-11: PCF N5 QoS policy path for IMS sessions (5G-specific: QoS flows)
-#   TC-12: PCF N5 SBI interface reachability (replaces Rx Diameter peer check)
-#   TC-13: Inter-NIB conference INVITE (join conference at external domain)
-#   TC-14: N-UE SINGLE audio (VoNR) conference — COMPLETE path (24 → room 1016; N ⇒ N CDR rows)
-#   TC-15: N-UE SINGLE video (ViNR) conference — COMPLETE path (8 → room 1017; N ⇒ N CDR rows)
+#   TC-1:  1-UE audio VoNR conference — COMPLETE path (room 1010)
+#   TC-2:  1-UE video ViNR conference — COMPLETE path (room 1011)
+#   TC-3:  4-UE audio VoNR conference — COMPLETE path (room 1012)
+#   TC-4:  Conference room reuse — COMPLETE path (room 1013 → 2 CDR rows)
+#   TC-5:  Distinct conference rooms + CDR isolation — COMPLETE path (rooms 1014, 1015)
+#   TC-6:  PCF N5 QoS policy path for IMS sessions (5G-specific: QoS flows)
+#   TC-7:  PCF N5 SBI interface reachability (replaces Rx Diameter peer check)
+#   TC-8:  Inter-NIB conference INVITE (join conference at external domain)
+#   TC-9:  N-UE SINGLE audio (VoNR) conference — COMPLETE path (24 → room 1016; N ⇒ N CDR rows)
+#   TC-10: N-UE SINGLE video (ViNR) conference — COMPLETE path (8 → room 1017; N ⇒ N CDR rows)
 #
-# The conf-factory tests (TC-3/5/6/8) route through the P-CSCF (not a direct FS dial)
-# and remain gated on conf-factory DNS. TC-14/15 hold is kept < FS 30s rtp-timeout (no
+# TC-9/15 hold is kept < FS 30s rtp-timeout (no
 # real RTP is sourced) so legs stay simultaneously in the room until they BYE.
 # Env-tunable: CONF_AUDIO_MEMBERS=24, CONF_VIDEO_MEMBERS=8, CONF_SOAK_SECS=20,
 #              CONF_AUDIO_ROOM=1016, CONF_VIDEO_ROOM=1017, CONF_CALL_HOLD=6,
@@ -51,10 +45,13 @@ set +e
 # ============================================================================
 
 # Count LEG rows for a conference bridge id (col 1 == LEG, col 8 == room).
+# Only rows written since this feature started (col 6, start time) are counted:
+# the CDR logger prunes rows older than its retention on every write, so a count
+# over the whole file can SHRINK between 'before' and 'after'.
 _conf_cdr_leg_count() {
     local room="$1"
     docker exec pcscf sh -c \
-        "test -f /cdr-logs/conf_cdr.csv && awk -F',' -v r='${room}' '\$1==\"LEG\" && \$8==r{c++} END{print c+0}' /cdr-logs/conf_cdr.csv || echo 0" \
+        "test -f /cdr-logs/conf_cdr.csv && awk -F',' -v r='${room}' -v s='${CONF_CDR_SINCE}' '\$1==\"LEG\" && \$8==r && (s==\"\" || \$6>=s){c++} END{print c+0}' /cdr-logs/conf_cdr.csv || echo 0" \
         2>/dev/null | tr -dc '0-9'
 }
 
@@ -104,152 +101,31 @@ _conf_pcscf_case() {
 
 run_conference_5g_tests() {
     start_feature "Conference (5G VoNR)"
+    # Clock of the container that stamps the CDR rows
+    CONF_CDR_SINCE=$(docker exec freeswitch date '+%Y-%m-%d %H:%M:%S' 2>/dev/null | tr -dc '0-9: -')
 
-    local conf_factory_dns_available=false
-    local conf_dns
-    conf_dns=$(dig +short conf-factory.${IMS_DOMAIN} @${DNS_IP} A 2>/dev/null | head -1 | tr -d '[:space:]')
-    if [ -n "$conf_dns" ]; then
-        conf_factory_dns_available=true
-        log "conf-factory DNS available: ${conf_dns}"
-    else
-        log "NOTE: conf-factory DNS not configured — conf-factory tests (TC-3,5,6,8) will be skipped"
-    fi
-
-    log "Preparing SIPp conference scenarios..."
-    sed "s/IMS_DOMAIN/$IMS_DOMAIN/g" /opt/test/scenarios/ue_a_conf_factory.xml > /tmp/test_conf_factory_5g.xml
-    sed "s/IMS_DOMAIN/$IMS_DOMAIN/g" /opt/test/scenarios/ue_a_vilte_conf_factory.xml > /tmp/test_vilte_conf_factory_5g.xml
-    sed "s/IMS_DOMAIN/$IMS_DOMAIN/g" /opt/test/scenarios/ue_a_hold_detect.xml > /tmp/test_hold_detect_5g.xml
-    log "Conference scenarios prepared"
-
-    # TC-1: DNS conf-factory resolution
-    _TEST_NUM=$((_TEST_NUM + 1))
-    if should_run_test $_TEST_NUM; then
-        log "TC-${_TEST_NUM}: DNS conf-factory resolution"
-        if $conf_factory_dns_available; then
-            if [ "$conf_dns" = "$PCSCF_IP" ]; then
-                pass "conf-factory.${IMS_DOMAIN} resolves to ${PCSCF_IP}"
-            else
-                fail "conf-factory.${IMS_DOMAIN} resolves to wrong IP" "Got ${conf_dns}, expected ${PCSCF_IP}"
-            fi
-        else
-            skip "DNS conf-factory resolution" "conf-factory DNS not configured"
-        fi
-    fi
-
-    # TC-2: 1-UE audio VoNR conference over the COMPLETE path (P-CSCF-routed)
+    # TC-1: 1-UE audio VoNR conference over the COMPLETE path (P-CSCF-routed)
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
         log "TC-${_TEST_NUM}: 1-UE audio VoNR conference via complete path (INVITE 1010 → P-CSCF → FreeSWITCH)"
         _conf_pcscf_case 1 1010 audio "${CONF_CALL_HOLD:-6}" "1-UE audio VoNR conference (complete path)"
     fi
 
-    # TC-3: P-CSCF VoNR conf-factory routing
-    _TEST_NUM=$((_TEST_NUM + 1))
-    if should_run_test $_TEST_NUM; then
-        if ! $conf_factory_dns_available; then
-            skip "P-CSCF VoNR conf-factory routing" "conf-factory DNS not configured"
-        else
-            log "TC-${_TEST_NUM}: P-CSCF VoNR conf-factory INVITE routing"
-            sipp ${PCSCF_IP}:${PCSCF_PORT} \
-                -sf /tmp/test_conf_factory_5g.xml \
-                -s mmtel \
-                -i $LOCAL_IP -p 7200 \
-                -m 1 -l 1 -timeout 15 -timeout_error \
-                >/tmp/sipp_conf5g_tc3.log 2>&1
-            RESULT=$?
-            if [ $RESULT -eq 0 ]; then
-                pass "P-CSCF routed VoNR conf-factory INVITE to FreeSWITCH (got 200 OK)"
-            else
-                fail "P-CSCF VoNR conf-factory routing failed" "SIPp exit code: $RESULT"
-            fi
-        fi
-    fi
-
-    # TC-4: 1-UE video (ViNR) conference over the COMPLETE path (P-CSCF-routed)
+    # TC-2: 1-UE video (ViNR) conference over the COMPLETE path (P-CSCF-routed)
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
         log "TC-${_TEST_NUM}: 1-UE video ViNR conference via complete path (INVITE 1011 → P-CSCF → FreeSWITCH)"
         _conf_pcscf_case 1 1011 video "${CONF_CALL_HOLD:-6}" "1-UE video ViNR conference (complete path)"
     fi
 
-    # TC-5: P-CSCF video conf-factory routing
-    _TEST_NUM=$((_TEST_NUM + 1))
-    if should_run_test $_TEST_NUM; then
-        if ! $conf_factory_dns_available; then
-            skip "P-CSCF video conf-factory routing" "conf-factory DNS not configured"
-        else
-            log "TC-${_TEST_NUM}: P-CSCF video conf-factory INVITE routing (video+audio SDP)"
-            sipp ${PCSCF_IP}:${PCSCF_PORT} \
-                -sf /tmp/test_vilte_conf_factory_5g.xml \
-                -s mmtel \
-                -i $LOCAL_IP -p 7400 \
-                -m 1 -l 1 -timeout 15 -timeout_error \
-                >/tmp/sipp_conf5g_tc5.log 2>&1
-            RESULT=$?
-            if [ $RESULT -eq 0 ]; then
-                pass "P-CSCF routed video conf-factory INVITE to FreeSWITCH"
-            else
-                fail "P-CSCF video conf-factory routing failed" "SIPp exit code: $RESULT"
-            fi
-        fi
-    fi
-
-    # TC-6: Sequential conference rooms
-    _TEST_NUM=$((_TEST_NUM + 1))
-    if should_run_test $_TEST_NUM; then
-        if ! $conf_factory_dns_available; then
-            skip "Sequential conference rooms via conf-factory" "conf-factory DNS not configured"
-        else
-            log "TC-${_TEST_NUM}: Multiple sequential conference rooms via conf-factory"
-            sipp ${PCSCF_IP}:${PCSCF_PORT} \
-                -sf /tmp/test_conf_factory_5g.xml -s mmtel \
-                -i $LOCAL_IP -p 7500 -m 1 -l 1 -timeout 15 -timeout_error \
-                >/tmp/sipp_conf5g_tc6a.log 2>&1; RESULT_A=$?
-            sleep 1
-            sipp ${PCSCF_IP}:${PCSCF_PORT} \
-                -sf /tmp/test_conf_factory_5g.xml -s mmtel \
-                -i $LOCAL_IP -p 7501 -m 1 -l 1 -timeout 15 -timeout_error \
-                >/tmp/sipp_conf5g_tc6b.log 2>&1; RESULT_B=$?
-
-            if [ $RESULT_A -eq 0 ] && [ $RESULT_B -eq 0 ]; then
-                pass "Both sequential conf-factory INVITEs succeeded (room counter working)"
-            elif [ $RESULT_A -eq 0 ]; then
-                fail "Second conf-factory INVITE failed" "Room counter collision? SIPp exit: $RESULT_B"
-            else
-                fail "First conf-factory INVITE failed" "SIPp exit: $RESULT_A"
-            fi
-        fi
-    fi
-
-    # TC-7: 4-UE audio VoNR conference over the COMPLETE path (P-CSCF-routed)
+    # TC-3: 4-UE audio VoNR conference over the COMPLETE path (P-CSCF-routed)
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
         log "TC-${_TEST_NUM}: 4-UE audio VoNR conference via complete path (room 1012 → P-CSCF → FreeSWITCH)"
         _conf_pcscf_case 4 1012 audio "${CONF_MULTI_HOLD:-20}" "4-UE audio VoNR conference (complete path)"
     fi
 
-    # TC-8: Hold SDP via conf-factory
-    _TEST_NUM=$((_TEST_NUM + 1))
-    if should_run_test $_TEST_NUM; then
-        if ! $conf_factory_dns_available; then
-            skip "Hold SDP via conf-factory" "conf-factory DNS not configured"
-        else
-            log "TC-${_TEST_NUM}: Hold SDP (sendonly) via P-CSCF conf-factory"
-            sipp ${PCSCF_IP}:${PCSCF_PORT} \
-                -sf /tmp/test_hold_detect_5g.xml \
-                -s mmtel -i $LOCAL_IP -p 7700 \
-                -m 1 -l 1 -timeout 15 -timeout_error \
-                >/tmp/sipp_conf5g_tc8.log 2>&1
-            RESULT=$?
-            if [ $RESULT -eq 0 ]; then
-                pass "P-CSCF handled sendonly SDP and routed conf-factory to FreeSWITCH"
-            else
-                fail "Sendonly SDP conf-factory routing failed" "SIPp exit code: $RESULT"
-            fi
-        fi
-    fi
-
-    # TC-9: conference room reuse over the COMPLETE path (dial → teardown → re-dial).
+    # TC-4: conference room reuse over the COMPLETE path (dial → teardown → re-dial).
     # Two sequential single-UE dials to the same room via the P-CSCF; expect the room
     # reusable and EXACTLY 2 CDR LEG rows total.
     _TEST_NUM=$((_TEST_NUM + 1))
@@ -279,7 +155,7 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-10: distinct conference rooms over the COMPLETE path (routing + per-bridge
+    # TC-5: distinct conference rooms over the COMPLETE path (routing + per-bridge
     # CDR isolation). Two rooms (1014, 1015), each a 2-UE conference via the P-CSCF;
     # each bridge must record EXACTLY its own 2 LEG rows.
     _TEST_NUM=$((_TEST_NUM + 1))
@@ -303,7 +179,7 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-11: PCF N5 QoS policy path for IMS sessions (5G-specific)
+    # TC-6: PCF N5 QoS policy path for IMS sessions (5G-specific)
     # In 5G SA, P-CSCF can use both Rx/Diameter and PCF N5 SBI for QoS authorization.
     # This TC validates: (a) Rx AAR is correctly bypassed for SIPp test clients without
     # +sip.instance IMEI, and (b) the PCF N5 SBI interface is reachable for real IMS UEs.
@@ -343,7 +219,7 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-12: PCF N5 SBI interface connectivity (5G-specific)
+    # TC-7: PCF N5 SBI interface connectivity (5G-specific)
     # In 5G SA, the PCF exposes an N5 SBI (HTTP/2) interface for policy decisions.
     # P-CSCF uses this (via Rx wrapper or natively) for IMS session policy.
     _TEST_NUM=$((_TEST_NUM + 1))
@@ -374,7 +250,7 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-13: Inter-NIB conference INVITE
+    # TC-8: Inter-NIB conference INVITE
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
         log "TC-${_TEST_NUM}: Inter-NIB conference INVITE (join room at external domain)"
@@ -403,7 +279,7 @@ run_conference_5g_tests() {
         fi
     fi
 
-    # TC-14: N-UE SINGLE audio (VoNR) conference — "24 UEs in one conference" over the
+    # TC-9: N-UE SINGLE audio (VoNR) conference — "24 UEs in one conference" over the
     # COMPLETE path. N SIPp legs dial ONE room through the P-CSCF and overlap for the
     # hold window. Requirement: N UEs ⇒ EXACTLY N CDR LEG rows.
     _TEST_NUM=$((_TEST_NUM + 1))
@@ -413,7 +289,7 @@ run_conference_5g_tests() {
         _conf_pcscf_case "$n_aud" "$room_aud" audio "$hold_a" "${n_aud}-UE audio VoNR conference (complete path)"
     fi
 
-    # TC-15: N-UE SINGLE video (ViNR) conference — "8 UEs in one video conference" over
+    # TC-10: N-UE SINGLE video (ViNR) conference — "8 UEs in one video conference" over
     # the COMPLETE path (audio+video SDP). Requirement: N UEs ⇒ EXACTLY N CDR LEG rows.
     _TEST_NUM=$((_TEST_NUM + 1))
     if should_run_test $_TEST_NUM; then
@@ -422,6 +298,6 @@ run_conference_5g_tests() {
         _conf_pcscf_case "$n_vid" "$room_vid" video "$hold_v" "${n_vid}-UE video ViNR conference (complete path)"
     fi
 
-    rm -f /tmp/sipp_conf5g_tc*.log /tmp/sipp_confsoak_*.log /tmp/sipp_pcscfconf_*.log /tmp/pcscf_conf_*_5g.xml /tmp/test_conf_factory_5g.xml /tmp/test_vilte_conf_factory_5g.xml /tmp/test_hold_detect_5g.xml 2>/dev/null
+    rm -f /tmp/sipp_conf5g_tc*.log /tmp/sipp_confsoak_*.log /tmp/sipp_pcscfconf_*.log /tmp/pcscf_conf_*_5g.xml 2>/dev/null
     end_feature
 }

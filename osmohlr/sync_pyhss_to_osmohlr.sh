@@ -161,6 +161,16 @@ except:
         break
     fi
 
+    # Full re-sync: once the first PyHSS page is known to be good, clear
+    # OsmoHLR so it ends up holding exactly what PyHSS holds
+    if [ "$PAGE" -eq 0 ]; then
+        log_info "Deleting all subscribers from OsmoHLR before re-adding them from PyHSS..."
+        if ! docker exec "$OSMOHLR_CONTAINER" sqlite3 "$DB_PATH" "BEGIN; DELETE FROM auc_2g; DELETE FROM auc_3g; DELETE FROM subscriber_apn; DELETE FROM subscriber_multi_msisdn; DELETE FROM subscriber; COMMIT;"; then
+            log_error "Could not clear OsmoHLR, nothing was deleted"
+            exit 1
+        fi
+    fi
+
     # Sync this page (row-level conflicts are skipped, not fatal)
     sync_page "$PAGE_DATA" "$PAGE"
 

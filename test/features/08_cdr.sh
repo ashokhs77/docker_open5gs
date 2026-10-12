@@ -82,8 +82,7 @@ run_cdr_tests() {
             pass "CDR file contains $line_count recorded call entries"
         else
             # CDR file exists but empty — this is OK if no calls have been made through S-CSCF yet
-            # Note: conf-factory calls bypass S-CSCF so don't generate CDRs
-            skip "CDR file is empty" "No calls have been routed through S-CSCF yet (conf-factory bypasses S-CSCF CDR)"
+            skip "CDR file is empty" "No calls have been routed through S-CSCF yet"
         fi
     fi
 

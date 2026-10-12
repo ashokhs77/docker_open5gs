@@ -1,0 +1,16 @@
+; Fixed, PLMN-independent name for the MMSC: set the handset APN's MMSC to
+; http://mmsc.lekha:8090 once and it works on every MCC/MNC. Each NIB's DNS
+; answers with its own MMSC_IP.
+$ORIGIN mmsc.lekha.
+$TTL 1D
+@                       1D IN SOA       localhost. root.localhost. (
+                                        1		; serial
+                                        3H              ; refresh
+                                        15M             ; retry
+                                        1W              ; expiry
+                                        1D )            ; minimum
+
+                        1D IN NS        ns
+ns                      1D IN A         DNS_IP
+
+@                       1D IN A         MMSC_IP
