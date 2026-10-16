@@ -24,9 +24,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#Global Variable
+ARG LICENSE=OFF
+
 FROM ubuntu:jammy AS builder
 
-ARG LICENSE=OFF
+ARG LICENSE
 ENV LICENSE=${LICENSE}
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -52,7 +55,7 @@ RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
 	git init kamailio && \
 	cd kamailio && \
 	git remote add origin https://github.com/ganeshsskumar/kamailio && \
-	git fetch --depth 1 origin 02b50932040e922839053300748739da9ea29dd6 && \
+	git fetch --depth 1 origin ba12e7aad3138b41c22644ace3b6c79940d9b77e && \
 	git checkout FETCH_HEAD
 
 # Build and Install Kamailio
@@ -62,13 +65,22 @@ RUN if [ "$LICENSE" = "ON" ]; then \
         echo 'DEFS+=-DENABLE_LICENSE_CHECK' >> /usr/local/src/kamailio/src/Makefile.defs; \
     fi
 COPY modules.lst /usr/local/src/kamailio/src
-
+	
 RUN cd /usr/local/src/kamailio && \
-	make -j`nproc` Q=0 all && \
-	make install && \
-	(find /usr/local -type f \( -path '*/sbin/*' -o -path '*/lib/*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true)
+    make -j`nproc` Q=0 all && \
+    make install && \
+    ldconfig && \
+    gcc -o /usr/local/sbin/license_check_helper \
+        /usr/local/src/kamailio/license_check_helper.c \
+        -I/usr/local/src/kamailio/src \
+        -L/usr/lib64 -lLwsLicenseCheck \
+        -Wl,-rpath,/usr/lib64 && \
+    (find /usr/local -type f \( -path '*/sbin/*' -o -path '*/lib/*' \) -exec strip --strip-unneeded {} + 2>/dev/null || true)
 
 FROM ubuntu:jammy
+
+ARG LICENSE
+ENV LICENSE=${LICENSE}
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -125,6 +137,7 @@ COPY license/libLwsLicenseCheck.so /usr/lib64/
 RUN chmod 755 /usr/lib64/libLwsLicenseCheck.so
 
 COPY kamailio_init.sh /
+COPY license_monitor.sh /usr/local/sbin/license_monitor.sh
 
 # Self-heal line endings on every shell script baked into the image. The source
 # tree is frequently edited/synced from Windows (CRLF); a CRLF shebang makes the
@@ -133,11 +146,12 @@ COPY kamailio_init.sh /
 # the image is correct no matter how the sources were checked out or synced.
 RUN sed -i 's/\r$//' \
         /kamailio_init.sh \
+	/usr/local/sbin/license_monitor.sh \
         /usr/local/bin/cdr-logger.sh \
         /usr/local/bin/conf-cdr-logger.sh \
         /etc/logrotate.d/kamailio-cdr \
         /etc/logrotate.d/kamailio-conf-cdr \
-    && chmod +x /kamailio_init.sh /usr/local/bin/cdr-logger.sh /usr/local/bin/conf-cdr-logger.sh
+    && chmod +x /kamailio_init.sh /usr/local/bin/cdr-logger.sh /usr/local/bin/conf-cdr-logger.sh /usr/local/sbin/license_monitor.sh
 
 CMD ["/kamailio_init.sh"]
 

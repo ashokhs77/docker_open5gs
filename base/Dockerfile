@@ -82,7 +82,7 @@ RUN ldconfig
 # cache and builder layers small.
 RUN git init open5gs && cd open5gs && \
     git remote add origin https://github.com/ashokhs77/open5gs && \
-    git fetch --depth 1 origin e08b4bd503cfcd5f5abd23cfae8415d2bf96503d && \
+    git fetch --depth 1 origin 66ddee2fa46b46a8d6977348e593ba9e757ed349 && \
     git checkout FETCH_HEAD && \
     git submodule update --init --recursive --depth 1 && \
     if [ "$LICENSE" = "OFF" ]; then \
@@ -93,6 +93,10 @@ RUN git init open5gs && cd open5gs && \
     fi && \
     meson build --prefix=`pwd`/install && \
     ninja -C build && cd build && ninja install && \
+    mkdir -p /open5gs/install/include && \
+    gcc -o /open5gs/install/bin/license_check_helper /open5gs/src/license_check_helper.c \
+    -I/open5gs/src -L/usr/lib64 -lLwsLicenseCheck \
+    -Wl,-rpath,/usr/lib64 && \
     (find ../install/bin ../install/lib -type f -exec strip --strip-unneeded {} + 2>/dev/null || true)
 
 # NOTE: The MME/AMF unauthorized-attach / mobility-reject audit feature is now
