@@ -1,0 +1,337 @@
+services:
+  dns:
+    build: ./dns
+    image: docker_dns
+    container_name: dns
+    env_file:
+      - .env
+    volumes:
+      - ./dns:/mnt/dns
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "53/udp"
+    networks:
+      default:
+        ipv4_address: ${DNS_IP}
+  sgwc:
+    image: docker_open5gs
+    depends_on:
+      - smf
+      - upf
+    container_name: sgwc
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=sgwc
+    volumes:
+      - ./sgwc:/mnt/sgwc
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "2123/udp"
+      - "8805/udp"
+    networks:
+      default:
+        ipv4_address: ${SGWC_IP}
+  sgwu:
+    image: docker_open5gs
+    depends_on:
+      - smf
+      - upf
+    container_name: sgwu
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=sgwu
+    volumes:
+      - ./sgwu:/mnt/sgwu
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "8805/udp"
+      - "2152/udp"
+    ports:
+      - "${DOCKER_HOST_IP}:2152:2152/udp"
+    networks:
+      default:
+        ipv4_address: ${SGWU_IP}
+  smf:
+    image: docker_open5gs
+    container_name: smf
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=smf
+      - DEPLOY_MODE=4G
+    volumes:
+      - ./smf:/mnt/smf
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "3868/tcp"
+      - "3868/sctp"
+      - "5868/tcp"
+      - "5868/sctp"
+      - "8805/udp"
+      - "2123/udp"
+      - "7777/tcp"
+      - "9091/tcp"
+    networks:
+      default:
+        ipv4_address: ${SMF_IP}
+  upf:
+    image: docker_open5gs
+    depends_on:
+      - smf
+    container_name: upf
+    # Privileged container with tun device + iptables/routing state to unwind.
+    stop_grace_period: 30s
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=upf
+    volumes:
+      - ./upf:/mnt/upf
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "2152/udp"
+      - "8805/udp"
+      - "9091/tcp"
+    cap_add:
+      - NET_ADMIN
+    privileged: true
+      # sysctls:
+      #- net.ipv4.ip_forward=1
+      #networks:
+      #default:
+      #  ipv4_address: ${UPF_IP}
+  mme:
+    image: docker_open5gs
+    depends_on:
+      - pyhss
+      - sgwc
+      - sgwu
+      - smf
+      - upf
+    container_name: mme
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=mme
+      - LD_LIBRARY_PATH=/usr/lib64
+      - MME_UNAUTHORIZED_ATTACH_CSV=/open5gs/install/var/log/open5gs/unauthorized_attach_attempts.csv
+      - MME_UNAUTHORIZED_ATTACH_MAX_BYTES=${MME_UNAUTHORIZED_ATTACH_MAX_BYTES:-10485760}
+    volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
+      - ./mme:/mnt/mme
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "3868/tcp"
+      - "3868/sctp"
+      - "5868/tcp"
+      - "5868/sctp"
+      - "36412/sctp"
+      - "2123/udp"
+      - "9091/tcp"
+    ports:
+      - "36412:36412/sctp"
+    networks:
+      default:
+        ipv4_address: ${MME_IP}
+  mysql:
+    build: ./mysql
+    image: docker_mysql
+    container_name: mysql
+    # Allow clean InnoDB shutdown (flush dirty pages) instead of a mid-write
+    # SIGKILL, which protects database integrity.
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    volumes:
+      - dbdata:/var/lib/mysql
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "3306/tcp"
+    networks:
+      default:
+        ipv4_address: ${MYSQL_IP}
+  pyhss:
+    environment: 
+      - TZ=Asia/Kolkata
+    build: ./pyhss
+    image: docker_pyhss
+    container_name: pyhss
+    dns: ${DNS_IP}
+    volumes:
+      - ./pyhss:/mnt/pyhss
+      - ./pyhss/logs:/pyhss/log/
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    depends_on:
+      - dns
+      - mysql
+    expose:
+      - "${PYHSS_BIND_PORT}/tcp"
+      - "${PYHSS_BIND_PORT}/sctp"
+      - "8080/tcp"
+    ports:
+      - "3868:3868/tcp"
+      - "8080:8080/tcp"
+    networks:
+      default:
+        ipv4_address: ${PYHSS_IP}
+
+  osmomsc:
+    build: ./osmomsc
+    image: docker_osmomsc
+    container_name: osmomsc
+    volumes:
+      - ./osmomsc:/mnt/osmomsc
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=osmomsc
+    depends_on:
+      - osmohlr
+    expose:
+      - "29118/sctp"
+      - "2775/tcp"
+    ports:
+      - "29118:29118/sctp"
+    networks:
+      default:
+        ipv4_address: ${OSMOMSC_IP}
+  osmohlr:
+    build: ./osmohlr
+    image: docker_osmohlr
+    container_name: osmohlr
+    volumes:
+      - ./osmohlr:/mnt/osmohlr
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=osmohlr
+    expose:
+      - "4222/tcp"
+    networks:
+      default:
+        ipv4_address: ${OSMOHLR_IP}
+  mmsc:
+    build: ./mmsc
+    image: mmsc
+    container_name: mmsc
+    network_mode: host
+    dns: ${DNS_IP}
+    volumes:
+      - ./mmsc/kannel.conf:/usr/local/kannel/etc/kannel.conf
+      - ./mmsc/mbuni.conf:/usr/local/mbuni/etc/mbuni.conf
+      - mms_storage:/tmp/mms-storage
+      - ./mmsc/nib_registry.conf:/etc/mmsc/nib_registry.conf
+      - ./mmsc/resolve_mmsc.sh:/etc/mmsc/resolve_mmsc.sh
+      - ./mmsc/mm4_receiver.py:/etc/mmsc/mm4_receiver.py
+      - ./mmsc/location_listener.py:/etc/mmsc/location_listener.py
+      - ./mmsc/mmsc_init.sh:/mmsc_init.sh
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    entrypoint: ["bash", "-c", "chmod 777 /etc/mmsc/resolve_mmsc.sh && bash /mmsc_init.sh"]
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=mmsc
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+        # depends_on:
+      #    - smsc
+    expose:
+      - "13000/tcp"   # Kannel admin
+      - "13001/tcp"   # smsbox
+      - "13013/tcp"
+      - "8090/tcp"    # WAP gateway
+      - "8181/tcp"    # Mbuni SendMMS API
+      - "8190/tcp"    # Mbuni MM7 SOAP
+      - "25/tcp"
+      - "7891/tcp"    # roaming-location listener (cross-NIB)
+        #ports:
+        # - "8090:8090/tcp"
+        # - "8181:8181/tcp"
+        # - "13000:13000/tcp"
+        #- "13001:13001/tcp"
+        #- "13013:13013/tcp"
+        # networks:
+        #default:
+        #ipv4_address: ${MMSC_IP}
+  metrics:
+    build: ./metrics
+    image: docker_metrics
+    container_name: metrics
+    env_file:
+      - .env
+    volumes:
+      - ./metrics:/mnt/metrics
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "${METRICS_BIND_PORT}/tcp"
+    ports:
+      - "${METRICS_BIND_PORT}:${METRICS_BIND_PORT}/tcp"
+    networks:
+      default:
+        ipv4_address: ${METRICS_IP}
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    env_file:
+      - .env
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/:/etc/grafana/provisioning/
+      - ./grafana:/mnt/grafana
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      #- GF_INSTALL_PLUGINS=${GRAFANA_INSTALL_PLUGINS}
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_LOG_LEVEL=warn
+      - METRICS_IP=${METRICS_IP}
+    expose:
+      - "3000/tcp"
+    ports:
+      - "3000:3000/tcp"
+    networks:
+      default:
+        ipv4_address: ${GRAFANA_IP}
+networks:
+  default:
+    name: docker_open5gs_default
+    ipam:
+      config:
+        - subnet: ${TEST_NETWORK}
+volumes:
+  grafana_data:
+    name: grafana_data
+  mongodbdata:
+    name: docker_open5gs_mongodbdata
+  dbdata:
+    name: docker_open5gs_dbdata
+  mms_storage:
+    name: docker_open5gs_mms_storage

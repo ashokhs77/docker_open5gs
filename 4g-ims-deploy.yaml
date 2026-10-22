@@ -1,0 +1,352 @@
+services:
+  dns:
+    build: ./dns
+    image: docker_dns
+    container_name: dns
+    env_file:
+      - .env
+    volumes:
+      - ./dns:/mnt/dns
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "53/udp"
+    networks:
+      default:
+        ipv4_address: ${DNS_IP}
+  rtpengine:
+    build: ./rtpengine
+    image: docker_rtpengine
+    container_name: rtpengine
+    network_mode: host
+    privileged: true
+    env_file:
+      - .env
+    volumes:
+      - ./rtpengine:/mnt/rtpengine
+      # Allows opt-in kernel mode to see/load a host-installed xt_RTPENGINE module.
+      - /lib/modules:/lib/modules:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      # Ubuntu 24.04/6.x hosts do not consistently have xt_RTPENGINE available.
+      # Default to userspace forwarding; operators can opt into kernel mode only
+      # after installing/verifying the host module by setting these env vars.
+      - TABLE=${RTPENGINE_TABLE:--1}
+      - INTERFACE=${RTPENGINE_IP}
+      - KERNEL_FORWARDING_MODE=${KERNEL_FORWARDING_MODE:-userspace}
+      - LISTEN_NG=${RTPENGINE_IP}:2223
+      - PIDFILE=/run/ngcp-rtpengine-daemon.pid
+      - PORT_MAX=50000
+      - PORT_MIN=49000
+      - NO_FALLBACK=no
+      # Empty default => rtpengine_init.sh auto-sizes threads to the host CPU
+      # count (one worker per core), matching SVN. Hardcoding 16 oversubscribed
+      # the 4-vCPU host and froze ViLTE conferences. Override only for bigger hosts.
+      - NUM_THREADS=${RTPENGINE_NUM_THREADS:-}
+      # Empty default => --poller-size omitted => rtpengine uses its 128 default
+      # (matches SVN). A lower value only load-balances MANY threads; with one
+      # worker per core it causes more "Too many packets" blips. Override only on
+      # big multi-core hosts running many threads, and measure before trusting it.
+      - POLLER_SIZE=${RTPENGINE_POLLER_SIZE:-}
+      # Default ON: raise host UDP receive buffers so a multi-UE video conference
+      # burst isn't dropped ("Too many packets in UDP receive queue"). Effective
+      # because this rtpengine container is privileged + host-network. Override via
+      # RTPENGINE_APPLY_HOST_NET_TUNING=no in .env if you tune net.core.* on the host.
+      - RTPENGINE_APPLY_HOST_NET_TUNING=${RTPENGINE_APPLY_HOST_NET_TUNING:-yes}
+      - RTPENGINE_EXTRA_ARGS=${RTPENGINE_EXTRA_ARGS:-}
+      - TOS=184
+  freeswitch:
+    build: ./freeswitch
+    image: docker_freeswitch
+    container_name: freeswitch
+    # FreeSWITCH cleans up active media/conference sessions on shutdown.
+    stop_grace_period: 30s
+    privileged: true
+    env_file:
+      - .env
+    environment:
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+    volumes:
+      - ./freeswitch:/mnt/freeswitch
+      - ./log:/open5gs/install/var/log/open5gs
+      # Conference CDR: FreeSWITCH is now the single source of conf_cdr.csv
+      # (mod_lua conference_cdr.lua -> shared conf_cdr_logger.sh). Same host path
+      # as the P-CSCF used, so the CDR file location/schema is unchanged.
+      - /var/log/kamailio:/cdr-logs
+      - ./ims_base/conf_cdr_logger.sh:/usr/local/bin/conf_cdr_logger.sh:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    command: ["/bin/bash", "/mnt/freeswitch/freeswitch_init.sh"]
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - "5090/tcp"
+      - "5090/udp" 
+      - "5092:5092/tcp"
+      - "5092:5092/udp"
+      # merge-call 3pcc participant profiles (see vars.xml). Separate from 5090
+      # because enable-3pcc breaks ordinary with-SDP inbound video on that profile.
+      - "5094/tcp"
+      - "5094/udp"
+      - "5096/tcp"
+      - "5096/udp"
+      - "5066/tcp"
+    networks:
+      default:
+        ipv4_address: ${FREESWITCH_IP}
+  mysql:
+    build: ./mysql
+    image: docker_mysql
+    container_name: mysql
+    # Allow clean InnoDB shutdown (flush dirty pages) instead of a mid-write
+    # SIGKILL, which protects database integrity.
+    stop_grace_period: 30s
+    env_file:
+      - .env
+    volumes:
+      - dbdata:/var/lib/mysql
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    expose:
+      - "3306/tcp"
+    networks:
+      default:
+        ipv4_address: ${MYSQL_IP}
+  pyhss:
+    environment: 
+      - TZ=Asia/Kolkata
+    build: ./pyhss
+    image: docker_pyhss
+    container_name: pyhss
+    dns: ${DNS_IP}
+    volumes:
+      - ./pyhss:/mnt/pyhss
+      - ./pyhss/logs:/pyhss/log/
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    depends_on:
+      - dns
+      - mysql
+    expose:
+      - "${PYHSS_BIND_PORT}/tcp"
+      - "${PYHSS_BIND_PORT}/sctp"
+      - "8080/tcp"
+    ports:
+      - "3868:3868/tcp"
+      - "8080:8080/tcp"
+    networks:
+      default:
+        ipv4_address: ${PYHSS_IP}
+  icscf:
+    image: docker_kamailio
+    container_name: icscf
+    # Kamailio graceful shutdown of worker processes can exceed the 10s default.
+    stop_grace_period: 30s
+    dns: ${DNS_IP}
+    volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+      - ./icscf:/mnt/icscf
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=icscf
+      - LD_LIBRARY_PATH=/usr/lib64
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+    depends_on:
+      - dns
+      - mysql
+      - pyhss
+    expose:
+      - "${ICSCF_BIND_PORT}/tcp"
+      - "${ICSCF_BIND_PORT}/sctp"
+      - "4060/udp"
+      - "4060/tcp"
+    ports:
+      - "4060:4060/udp"
+      - "4060:4060/tcp"
+    networks:
+      default:
+        ipv4_address: ${ICSCF_IP}
+  scscf:
+    image: docker_kamailio
+    container_name: scscf
+    # Kamailio graceful shutdown of worker processes can exceed the 10s default.
+    stop_grace_period: 30s
+    dns: ${DNS_IP}
+    volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+      - ./scscf:/mnt/scscf
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /var/log/kamailio:/cdr-logs
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=scscf
+      - LD_LIBRARY_PATH=/usr/lib64
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+    depends_on:
+      - dns
+      - mysql
+      - pyhss
+    expose:
+      - "${SCSCF_BIND_PORT}/tcp"
+      - "${SCSCF_BIND_PORT}/sctp"
+      - "6060/udp"
+      - "6060/tcp"
+    ports:
+      - "6060:6060/udp"
+      - "6060:6060/tcp"
+    networks:
+      default:
+        ipv4_address: ${SCSCF_IP}
+  opensips:
+    # OpenSIPS 4.0 B2BUA application server for call merge and conferencing.
+    build:
+      context: ./opensips
+      dockerfile: Dockerfile
+    image: docker_opensips_as
+    container_name: opensips
+    dns: ${DNS_IP}
+    # NET_ADMIN: opensips_init.sh adds a DNAT so the AS reaches the S-CSCF directly.
+    cap_add:
+      - NET_ADMIN
+    entrypoint: ["/bin/bash", "-c", "chmod +x /mnt/opensips/*.sh; exec /mnt/opensips/opensips_init.sh"]
+    volumes:
+      - ./opensips:/mnt/opensips
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=opensips
+    depends_on:
+      - dns
+      - scscf
+      - freeswitch
+    expose:
+      - "5060/udp"
+      - "5060/tcp"
+    networks:
+      default:
+        ipv4_address: ${OPENSIPS_IP}
+  pcscf:
+    image: docker_kamailio
+    container_name: pcscf
+    # P-CSCF runs privileged with IPSec/xfrm state and ~700 worker PIDs.
+    # Graceful kamailio shutdown (tearing down IPSec SAs + workers) can exceed
+    # Docker's 10s default, causing a SIGKILL + containerd "did not receive an
+    # exit event" race that wedges `compose down`. 60s lets it exit cleanly;
+    # Docker proceeds immediately once the process exits, so this only waits
+    # when genuinely needed.
+    stop_grace_period: 60s
+    dns: ${DNS_IP}
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+      - ./pcscf:/mnt/pcscf
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /var/log/kamailio:/cdr-logs
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=pcscf
+      - DEPLOY_MODE=4G
+      - LD_LIBRARY_PATH=/usr/lib64
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+    depends_on:
+      - dns
+      - mysql
+      - rtpengine
+      - icscf
+      - scscf
+        #expose:
+        #- "${PCSCF_BIND_PORT}/tcp"
+        # - "${PCSCF_BIND_PORT}/sctp"
+        #- "5060/tcp"
+        #- "5060/udp"
+        #- "5100-5120/tcp"
+        #- "5100-5120/udp"
+        #- "6100-6120/tcp"
+        #- "6100-6120/udp"
+    ports:
+      - "5060:5060/tcp"
+      - "5060:5060/udp"
+      - "5100-5120:5100-5120/tcp"
+      - "5100-5120:5100-5120/udp"
+      - "6100-6120:6100-6120/tcp"
+      - "6100-6120:6100-6120/udp"
+        # networks:
+        # default:
+        #ipv4_address: ${PCSCF_IP}
+  smsc:
+    image: docker_kamailio
+    container_name: smsc
+    # Kamailio graceful shutdown of worker processes can exceed the 10s default.
+    stop_grace_period: 30s
+    dns: ${DNS_IP}
+    volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_IMS:/usr/local/License_LWS_IMS:ro
+      - ./smsc:/mnt/smsc
+      - ./log:/open5gs/install/var/log/open5gs
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    env_file:
+      - .env
+    environment:
+      - COMPONENT_NAME=smsc
+      - LD_LIBRARY_PATH=/usr/lib64
+      - IMS_LOG_ENABLED=${IMS_LOG_ENABLED:-true}
+    depends_on:
+      - dns
+      - mysql
+    expose:
+      - "7090/udp"
+      - "7090/tcp"
+    ports:
+      - "7090:7090/udp"
+      - "7090:7090/tcp"  
+    networks:
+      default:
+        ipv4_address: ${SMSC_IP}
+
+networks:
+  default:
+    name: docker_open5gs_default
+    ipam:
+      config:
+        - subnet: ${TEST_NETWORK}
+volumes:
+  grafana_data:
+    name: grafana_data
+  mongodbdata:
+    name: docker_open5gs_mongodbdata
+  dbdata:
+    name: docker_open5gs_dbdata
+
