@@ -239,7 +239,7 @@ sudo docker rm -f $(sudo docker ps -aq --filter name=load) 2>/dev/null
 | `slicing` | Network Slicing | 7 | S‑NSSAI selection (NSSF) | no |
 | `security_5g` | Security (5G) | 14 | 5G auth/input‑validation/DoS posture | some |
 | `mms_5g` | MMS over 5GS | 18 | MMS/Kannel/Mbuni over 5GS | some |
-| `conference_5g` | Conference (5G VoNR) | 15 | **complete‑path** VoNR conferences (INVITE `1NNR` → P‑CSCF → FreeSWITCH) incl. single **24‑audio / 8‑video** — each asserts **exactly N `LEG` rows** in `conf_cdr.csv`; plus conf‑factory + PCF N5 QoS + inter‑NIB | some |
+| `conference_5g` | Conference (5G VoNR) | 10 | **complete‑path** VoNR conferences (INVITE `1NNR` → P‑CSCF → FreeSWITCH) incl. single **24‑audio / 8‑video** — each asserts **exactly N `LEG` rows** in `conf_cdr.csv`; plus PCF N5 QoS + inter‑NIB (old SIPp conf‑factory cases removed) | some |
 | `advanced_sip_5g` | Advanced SIP (5G VoNR) | 5 | RTP echo/DTMF/REFER/emergency over VoNR | some |
 | `stress_5g` | Stress Test (5G VoNR) | 9 | VoNR stability under stress | **yes** |
 | `video_vonr` | Video VoNR (ViNR) | 10 | video VoNR (ViNR) call flows | some |

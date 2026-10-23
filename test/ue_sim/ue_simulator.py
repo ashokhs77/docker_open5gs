@@ -39,6 +39,7 @@ from typing import Optional, List, Dict, Any, Tuple
 
 from .config import Config, SubscriberConfig, setup_logging
 from .milenage import Milenage, AuthenticationError
+from .xor_algo import make_auth_algo
 from .nas_handler import NASHandler, EPSMobilityMessageType
 from .s1ap_client import S1APClient, S1APProcedureCode, SharedS1APConnection, s1ap_procedure_name
 from .sip_client import SIPClient
@@ -139,6 +140,9 @@ class UESimulator:
         pcscf_ip: Override P-CSCF IP
         pcscf_port: Override P-CSCF port
         sip_local_port: Local port for SIP
+        auth_algo: SIM authentication algorithm, "milenage" (default) or "xor"
+            (3GPP TS 34.108 test algorithm; opc is then ignored)
+        auth_res_len: RES length in bytes for "xor" (default 8)
     """
 
     def __init__(
@@ -156,6 +160,8 @@ class UESimulator:
         sip_local_port: int = None,
         shared_conn: 'SharedS1APConnection' = None,
         ue_network_capability: bytes = None,
+        auth_algo: str = "milenage",
+        auth_res_len: int = None,
     ):
         self._imsi = imsi
         self._msisdn = msisdn or imsi  # Use IMSI if no MSISDN
@@ -167,8 +173,10 @@ class UESimulator:
         self._current_stage = ""
         self._current_stage_started_at = 0.0
 
-        # Milenage authentication
-        self._milenage = Milenage.from_hex(ki, opc, amf)
+        # SIM authentication algorithm. The attribute keeps its historical name;
+        # it holds a Milenage or an XorAlgo object (same interface).
+        self._auth_algo = (auth_algo or "milenage").strip().lower()
+        self._milenage = make_auth_algo(self._auth_algo, ki, opc, amf, auth_res_len)
 
         # NAS handler
         self._nas = NASHandler(imsi, ue_network_capability=ue_network_capability)
@@ -1052,6 +1060,17 @@ class UESimulator:
             self._state = UEState.IMS_REGISTERED
         return ok
 
+    @property
+    def sip(self) -> Optional[SIPClient]:
+        """The UE's SIP client (None until ims_register()). Gives tests direct access to
+        the supplementary-service helpers in sip_supplementary.py (merge, drop, pump...)."""
+        return self._sip
+
+    @property
+    def auth_algo(self) -> str:
+        """SIM authentication algorithm in use: "milenage" or "xor"."""
+        return self._auth_algo
+
     def active_dialogs(self) -> List[Dict[str, Any]]:
         """Return currently tracked SIP dialogs for this UE."""
         if not self._sip:
@@ -1791,9 +1810,14 @@ class UESimulator:
         call_type: str = "volte",
         call_duration: float = 5.0,
         skip_call: bool = False,
+        call_gate=None,
     ) -> UEMetrics:
         """
         Run the complete UE lifecycle: attach → register → call → detach.
+
+        call_gate: optional callable invoked after a successful IMS registration and
+        before the call. It may block; run_load_test(phased_call=True) uses it to hold
+        every UE until all of them are attached and registered.
 
         Args:
             target_msisdn: Target for call (None = skip call)
@@ -1819,6 +1843,9 @@ class UESimulator:
             logger.error("[%s] Lifecycle aborted: IMS registration failed", self._imsi)
             self.detach()
             return self._metrics
+
+        if call_gate is not None:
+            call_gate()
 
         # Call
         if not skip_call and target_msisdn:
@@ -1924,6 +1951,10 @@ class LoadTestResult:
     failure_samples: Dict[str, List[str]] = field(default_factory=dict)
     stage_latency_ms: Dict[str, Dict[str, float]] = field(default_factory=dict)
     slowest_ues: List[Dict[str, Any]] = field(default_factory=list)
+    # run_load_test(phased_call=True): UEs registered when the calls were released,
+    # and how long the attach+register phase took
+    phase1_registered: int = 0
+    phase1_seconds: float = 0.0
 
     @property
     def attach_success_rate(self) -> float:
@@ -1988,6 +2019,7 @@ def _run_single_ue(
     sip_port: int,
     skip_call: bool,
     shared_conn: 'SharedS1APConnection' = None,
+    call_gate=None,
 ) -> UEMetrics:
     """Worker function for running a single UE lifecycle in a thread pool."""
     ue = None
@@ -2006,6 +2038,7 @@ def _run_single_ue(
             call_type=call_type,
             call_duration=call_duration,
             skip_call=skip_call,
+            call_gate=call_gate,
         )
     except Exception as e:
         logger.error("UE worker error: %s", e)
@@ -2031,6 +2064,7 @@ def run_load_test(
     use_shared_enb: bool = True,
     ues_per_enb: int = None,
     attach_stagger_ms: float = None,
+    phased_call: bool = False,
 ) -> LoadTestResult:
     """
     Run a load test with multiple concurrent UEs distributed across virtual eNBs.
@@ -2066,6 +2100,14 @@ def run_load_test(
                       10   → 10ms/UE → realistic eNB RACH scheduling (~100 UE/sec).
                       50   → 50ms/UE → slower RACH / intentional pacing.
                       Set ATTACH_STAGGER_MS env var to override from shell.
+        phased_call:  False (default) → every UE runs attach → register → call on its
+                      own, so the calls start as each UE gets there.
+                      True → two phases: all UEs attach and register first (paced by
+                      attach_stagger_ms), and only when every UE has either registered
+                      or failed do the registered ones place their calls, together.
+                      Used by the conference tests: "N UEs in one conference" is then
+                      not at the mercy of an N-UE attach burst.
+                      result.phase1_seconds / result.phase1_registered report phase 1.
 
     Returns:
         LoadTestResult with aggregated metrics
@@ -2231,6 +2273,16 @@ def run_load_test(
     # ----------------------------------------------------------------
     metrics_list: List[UEMetrics] = []
 
+    # Phased mode: UEs park here after registering until the main thread opens the gate.
+    gate_open = threading.Event()
+    gate_lock = threading.Lock()
+    gate_waiting = [0]
+
+    def _call_gate():
+        with gate_lock:
+            gate_waiting[0] += 1
+        gate_open.wait(timeout=600.0)
+
     try:
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
@@ -2244,14 +2296,37 @@ def run_load_test(
                     sip_port=sip_port,
                     skip_call=skip_call,
                     shared_conn=conn,
+                    call_gate=_call_gate if phased_call else None,
                 )
                 futures.append(future)
                 if launch_stagger_s > 0:
                     time.sleep(launch_stagger_s)
 
+            if phased_call:
+                # Phase 1 ends when every UE is parked at the gate (registered) or has
+                # finished (failed before the gate). The deadline covers the slowest UE.
+                phase1_deadline = time.time() + Config.S1AP_TIMEOUT * 3 + Config.SIP_TIMEOUT * 2 + 30.0
+                while time.time() < phase1_deadline:
+                    finished = sum(1 for f in futures if f.done())
+                    with gate_lock:
+                        parked = gate_waiting[0]
+                    if parked + finished >= len(futures):
+                        break
+                    time.sleep(0.2)
+                with gate_lock:
+                    result.phase1_registered = gate_waiting[0]
+                result.phase1_seconds = round(time.time() - start_time, 1)
+                logger.warning(
+                    "Phased call: %d/%d UEs attached+registered after %.1fs (stagger %.0fms) - releasing the calls",
+                    result.phase1_registered, len(futures), result.phase1_seconds,
+                    launch_stagger_s * 1000)
+                gate_open.set()
+
             # Collect results as they complete
             # Timeout = per-eNB timeout + generous headroom for the whole batch
             collect_timeout = Config.S1AP_TIMEOUT + Config.SIP_TIMEOUT + 30.0
+            if phased_call:
+                collect_timeout += call_duration
             for future in concurrent.futures.as_completed(futures, timeout=collect_timeout):
                 try:
                     m = future.result(timeout=collect_timeout)
@@ -2267,6 +2342,7 @@ def run_load_test(
                     m.error_message = str(e)
                     metrics_list.append(m)
     finally:
+        gate_open.set()   # never leave a UE thread parked
         # Always disconnect all eNB connections
         for conn in enb_connections:
             try:

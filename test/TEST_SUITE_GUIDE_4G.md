@@ -16,7 +16,7 @@ conformance/assurance block.
 
 | | Value |
 |---|---|
-| Feature groups | **34** (22 core + 12 TRL8) |
+| Feature groups | **36** (24 core + 12 TRL8) |
 | Total test cases | **403** |
 | Last full‑bundle result | **326 PASS / 1 FAIL / 76 SKIP** (the 1 fail was a transient multi‑UE registration timeout that passes on re‑run) |
 | Test runner image | `docker_test` (built from `test/Dockerfile`) |
@@ -125,23 +125,23 @@ See the feature keys in §7.
 
 ### 5c. A curated bundle
 ```bash
-sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle tec    # 22 core evidence features + TEC gap matrix
+sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle tec    # 22 core evidence features (all core except sim_algo, call_merge) + TEC gap matrix
 sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle trl8   # the 12 TRL8 add-on features only
-sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle all    # everything (34 features / 403 TCs)
+sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle all    # everything (36 features / 478 TCs)
 ```
 
 ### 5d. The default core run (no arguments)
 ```bash
 sudo docker compose -f docker-compose.test.yaml run --rm sipp-test
 ```
-Runs the **core** feature set (the 22 core features); the TRL8 add‑on is excluded.
+Runs the **core** feature set (the 24 core features); the TRL8 add‑on is excluded.
 
 ### 5e. The complete suite
 ```bash
 sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle all
 ```
 This is the full release‑validation run. It auto‑provisions test subscribers, runs all
-34 features (load/stress are ordered late to avoid flooding evidence used by grep‑based
+36 features (load/stress are ordered late to avoid flooding evidence used by grep‑based
 conformance tests), and — because it is `--bundle all` — also generates the
 **comprehensive report** (see §9). Expect ~2 hours on the reference VM.
 
@@ -169,12 +169,13 @@ conformance tests), and — because it is `--bundle all` — also generates the
 
 ## 7. Feature catalog
 
-### Core features (22) — default run + `--bundle tec` + `--bundle all`
+### Core features (24) — default run + `--bundle all`; `--bundle tec` runs all of them except `sim_algo` and `call_merge`
 
 | key | group | TCs | what it covers |
 |---|---|---:|---|
 | `epc_health` | EPC Health | 20 | EPC/IMS container + interface health — **runs first** |
 | `hss_auc` | HSS AUC Auth | 12 | HSS/AUC authentication, SQN, IMS AKA, live Attach Reject audit plus deployed-binary/catalog verification of 42 named causes and the future-cause fallback |
+| `sim_algo` | SIM Algo | 22 | per‑subscriber SIM authentication algorithm (`AUC.algo`): provisioning of `algo=xor` (PUT/PATCH/CSV/bulk sheet), XOR test‑algorithm vectors checked by an independent UE‑side implementation, attach / NAS security / SQN resync / IMS AKA / calls with an XOR SIM, mixed XOR + Milenage, and **negatives** (algorithm mismatch → MAC failure, wrong K, unknown `algo`, 256‑bit K, RES‑length mismatch, missing `opc`). XOR cases **SKIP** when the PyHSS image lacks the XOR change (pyhss fork commit pinned in `pyhss/Dockerfile`). Not in `--bundle tec` |
 | `pdn_session` | PDN Session | 9 | PDN/APN/default‑bearer establishment |
 | `pyhss_api` | PyHSS API Negative | 10 | PyHSS REST negative‑input validation (malformed IMSI/Ki/OPc/JSON → 400) |
 | `attach_churn` | Attach Detach Churn | 9 | attach/detach lifecycle churn |
@@ -184,7 +185,8 @@ conformance tests), and — because it is `--bundle all` — also generates the
 | `eir` | EIR | 6 | EIR / subscriber + AUC + IMS provisioning |
 | `sms` | SMS | 13 | SMS over IMS, intra/inter‑NIB, **store‑and‑forward** (offline recipient) |
 | `inter_nib` | Inter‑NIB | 8 | shared inter‑NIB infra: I‑CSCF routing, DNS, INVITE |
-| `conference` | Conference | 17 | **complete‑path** conferences (register → P‑CSCF → FreeSWITCH, R‑URI `1NNR`) incl. single **24‑audio / 8‑video** soak — each asserts **exactly N `LEG` rows** in `conf_cdr.csv`; plus conf‑factory ingress + inter‑NIB |
+| `conference` | Conference | 15 | **complete‑path** conferences (register → P‑CSCF → FreeSWITCH, R‑URI `1NNR`) incl. single **24‑audio / 8‑video** soak — each asserts **exactly N `LEG` rows** in `conf_cdr.csv`; plus Rx and inter‑NIB, and **CDR content** checks (who is in each `LEG` row, `CONF` host/participants/peak, row order, media column, per‑leg times) from a 3‑UE staggered conference in room 1018 and a video one in 1019. (The old SIPp conf‑factory cases were removed — merge is `call_merge`.) |
+| `call_merge` | Call Merge | 33 | handset **Merge** via the **OpenSIPS B2BUA AS**: prerequisites (AS + MI, FreeSWITCH 5090/5094/5096, DNS, iFC), every call anchored (own Call‑ID on the far leg, hold/resume, CANCEL, 486, unregistered callee), conference factory, 3/4‑party merge of dialled **and received** calls, video merge, Drop, participant leaves, participant‑initiated merge (joins the same room), roster SUBSCRIBE → 489, **negatives** (REFER without / with unknown Replaces, drop of a non‑member), B2B‑session / room cleanup, and the **merge conference CDR** (`conf_cdr.csv`, bridge `merge-<tag>`). Uses the Python UE simulator (`ue_sim/merge_scenarios.py`); inter‑NIB merge and audio mixing are reported as SKIP (manual). Not in `--bundle tec` |
 | `fxo_fxs` | FXO/FXS | 5 | analog/FXO‑FXS breakout (skips without hardware) |
 | `mobile_ip` | Mobile‑to‑IP | 6 | same‑IMS mobile‑to‑softphone (needs `SOFTPHONE_TARGET_URI`) |
 | `cdr` | CDR | 13 | VoLTE/ViLTE CDR (S‑CSCF `cdr.csv`) + **conference CDR** (FreeSWITCH‑sourced `conf_cdr.csv`): 9‑col schema, newest‑on‑top, 7‑day retention, and a real‑UE conference dial (register → P‑CSCF → FreeSWITCH) |
@@ -219,10 +221,10 @@ conformance tests), and — because it is `--bundle all` — also generates the
 
 | bundle | contents | use it for |
 |---|---|---|
-| *(no arg)* | 22 core features | dev/deployment smoke |
-| `--bundle tec` | 22 core features + TEC gap matrix | strongest automated 4G+IMS evidence pack |
+| *(no arg)* | 24 core features | dev/deployment smoke |
+| `--bundle tec` | 22 core features (all but `sim_algo`, `call_merge`) + TEC gap matrix | strongest automated 4G+IMS evidence pack |
 | `--bundle trl8` | 12 TRL8 features only | conformance/assurance pass |
-| `--bundle all` | 34 features (core + TRL8) + comprehensive report | full release validation |
+| `--bundle all` | 36 features (core + TRL8) + comprehensive report | full release validation |
 
 ---
 

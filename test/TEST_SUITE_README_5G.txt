@@ -139,7 +139,7 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
   CORE (19) — default run / --bundle full / --bundle all
     regression_5g(23)  5gc_health(20)  nrf_sbi(10)  ausf_udm(8)  registration(9)
     pdu_session(7)  pdu_profile_5g(10)  vonr(11)  sms_5g(13)  cdr_5g(13)  slicing(7)
-    security_5g(14)  mms_5g(18)  conference_5g(15)  advanced_sip_5g(5)  stress_5g(9)
+    security_5g(14)  mms_5g(18)  conference_5g(10)  advanced_sip_5g(5)  stress_5g(9)
     video_vonr(10)  qos_flow_5g(10)  load_5g(20)
 
   TRL8 (12) — opt-in: --feature <key> / --bundle trl8 / --bundle all

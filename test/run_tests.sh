@@ -56,6 +56,10 @@ source /opt/test/features/27_charging.sh
 source /opt/test/features/28_li_presence.sh
 source /opt/test/features/29_interface_evidence.sh
 
+# Rev48 features: OpenSIPS B2BUA call merge, SIM authentication algorithm (XOR)
+source /opt/test/features/30_call_merge.sh
+source /opt/test/features/31_sim_algo.sh
+
 # Parse arguments
 FEATURE=""
 TEST_NUM=0
@@ -65,6 +69,7 @@ BUNDLE=""
 FEATURES=(
     "epc_health:run_epc_health_tests:EPC Health"
     "hss_auc:run_hss_auc_tests:HSS AUC Auth"
+    "sim_algo:run_sim_algo_tests:SIM Algo"
     "pdn_session:run_pdn_session_tests:PDN Session"
     "pyhss_api:run_pyhss_api_tests:PyHSS API Negative"
     "attach_churn:run_attach_churn_tests:Attach Detach Churn"
@@ -75,6 +80,7 @@ FEATURES=(
     "sms:run_sms_tests:SMS"
     "inter_nib:run_inter_nib_tests:Inter-NIB"
     "conference:run_conference_tests:Conference"
+    "call_merge:run_call_merge_tests:Call Merge"
     "fxo_fxs:run_fxo_fxs_tests:FXO/FXS"
     "mobile_ip:run_mobile_ip_tests:Mobile-to-IP"
     "cdr:run_cdr_tests:CDR"
@@ -152,6 +158,7 @@ BUNDLE_TRL8_FEATURES=(
 BUNDLE_ALL_FEATURES=(
     "epc_health"
     "hss_auc"
+    "sim_algo"
     "pdn_session"
     "pyhss_api"
     "attach_churn"
@@ -162,6 +169,7 @@ BUNDLE_ALL_FEATURES=(
     "sms"
     "inter_nib"
     "conference"
+    "call_merge"
     "fxo_fxs"
     "mobile_ip"
     "cdr"
@@ -225,6 +233,31 @@ Feature: HSS/AUC Auth (--feature hss_auc)
   TC-8:  Unknown IMSI is rejected
   TC-9:  SQN re-synchronisation via AUTS succeeds
   TC-10: IMS AKA registration succeeds for the auth subscriber
+
+Feature: SIM Algo (--feature sim_algo)   [AUC.algo: Milenage / XOR test algorithm]
+  TC-1:  PyHSS image supports XOR (code present, unit tests pass in the container)
+  TC-2:  AuC entry with algo=xor is created and read back
+  TC-3:  algo can be changed on an existing entry (PATCH)
+  TC-4:  Vector API output accepted by an independent XOR implementation
+  TC-5:  EPC attach with an XOR SIM
+  TC-6:  NAS security works after an XOR attach (TAU)
+  TC-7:  AuC SQN advances after an XOR attach
+  TC-8:  SQN re-synchronisation (AUTS) with an XOR SIM
+  TC-9:  IMS AKA registration with an XOR SIM
+  TC-10: Call between two XOR SIMs
+  TC-11: Calls between an XOR SIM and a Milenage SIM, both directions
+  TC-12: algo value is case-insensitive ("XOR")
+  TC-13: CSV upload (PUT /auc/upload) with an algo column
+  TC-14: Bulk sheet (PUT /auc/newsubscriber/upload) with and without an algo column
+  TC-15: [NEG] XOR SIM provisioned as Milenage is rejected (MAC failure)
+  TC-16: [NEG] Milenage SIM provisioned as xor is rejected
+  TC-17: [NEG] XOR SIM with a wrong K is rejected
+  TC-18: [NEG] Unknown algo value is treated as Milenage
+  TC-19: [NEG] XOR entry with a 256-bit K never authenticates
+  TC-20: [NEG] RES length mismatch is rejected
+  TC-21: [NEG] AuC entry without opc is refused by the API
+  TC-22: Milenage subscriber still attaches and IMS-registers (regression guard)
+  (XOR cases are SKIPPED when the PyHSS image has no XOR support)
 
 Feature: PDN Session (--feature pdn_session)
   TC-1:  EPC user-plane NFs and primary ports are ready
@@ -382,21 +415,57 @@ Feature: Inter-NIB (--feature inter_nib)
   TC-8: Inter-NIB SIP INVITE routing via I-CSCF (non-5xx required)
 
 Feature: Conference (--feature conference)
-  TC-1:  DNS conf-factory resolution
-  TC-2:  Direct FreeSWITCH VoLTE conference (1010)
-  TC-3:  P-CSCF VoLTE conf-factory routing
-  TC-4:  Direct FreeSWITCH ViLTE conference (1010 with video SDP)
-  TC-5:  P-CSCF ViLTE conf-factory routing
-  TC-6:  Sequential conference rooms
-  TC-7:  Multi-member conference join (4 members)
-  TC-8:  Hold SDP via conf-factory
-  TC-9:  Conference cleanup/room reuse (1013)
-  TC-10: Concurrent conferences (1014 + 1015)
-  TC-11: Rx AAR behavior for conference INVITE
-  TC-12: Rx Diameter peer connectivity
-  TC-13: Inter-NIB conference INVITE (sip:1010@external.example, non-5xx required)
-  TC-14: 24-member SINGLE audio conference — join + sustained hold past rtp-timeout (stability primary; join count is in-suite ceiling, full N via real-UE/multi-host)
-  TC-15: 8-member  SINGLE video conference — join + sustained hold (stability primary; real video media needs real UEs)
+  TC-1:  1-UE audio conference, complete path (register -> P-CSCF -> room 1010)
+  TC-2:  1-UE video conference, complete path (room 1011)
+  TC-3:  4-UE audio conference, complete path (room 1012)
+  TC-4:  Conference room reuse (room 1013, dial/teardown/re-dial -> 2 CDR rows)
+  TC-5:  Distinct conference rooms + CDR isolation (rooms 1014, 1015)
+  TC-6:  Rx AAR behavior for conference INVITE
+  TC-7:  Rx Diameter peer connectivity
+  TC-8:  Inter-NIB conference INVITE (sip:1010@external.example, non-5xx required)
+  TC-9:  24-member SINGLE audio conference (room 1016; N UEs => N CDR rows)
+  TC-10: 8-member SINGLE video conference (room 1017; N UEs => N CDR rows)
+  TC-11: CDR content - each LEG row carries its own participant (3 UEs, room 1018)
+  TC-12: CDR content - CONF row: host = first joiner, participants, peak count
+  TC-13: CDR content - CONF row on top, LEG rows in join order
+  TC-14: CDR content - media column: audio (room 1018) and video (room 1019)
+  TC-15: CDR content - per-leg start time and duration
+  (the former conf-factory SIPp cases were removed: merge is tested by call_merge)
+
+Feature: Call Merge (--feature call_merge)   [OpenSIPS B2BUA AS]
+  TC-1:  OpenSIPS AS is running and its MI interface answers
+  TC-2:  FreeSWITCH merge profiles are up (5090 focus, 5094 audio, 5096 video)
+  TC-3:  DNS resolves the AS name used in the iFC
+  TC-4:  The default iFC triggers the AS (originating, and terminating inter-NIB)
+  TC-5:  Basic call is anchored (terminating leg has its own Call-ID)
+  TC-6:  Hold and resume pass through the B2BUA
+  TC-7:  Release by the callee passes through the B2BUA
+  TC-8:  Video call is anchored with video intact
+  TC-9:  CANCEL while ringing reaches the callee
+  TC-10: Busy callee (486) is reported to the caller
+  TC-11: Call to a number that is not registered fails cleanly
+  TC-12: No B2B sessions are left behind by the calls above
+  TC-13: Conference factory alone: focus answered, room created and removed
+  TC-14: Three-party merge (A called B and C)
+  TC-15: Conference roster SUBSCRIBE is answered 489
+  TC-16: The initiator ends the conference for everybody
+  TC-17: Merge of a call the initiator RECEIVED
+  TC-18: Four-party merge
+  TC-19: Drop one participant, the conference continues
+  TC-20: A participant hangs up, the conference continues
+  TC-21: Video merge
+  TC-22: A participant adds a party (joins the existing room, no second room)
+  TC-23: [NEG] REFER without Replaces is refused (488)
+  TC-24: [NEG] REFER naming an unknown dialog merges nobody
+  TC-25: [NEG] Drop of a number that is not in the conference is refused (404)
+  TC-26: No B2B sessions or rooms are left behind by the merge tests
+  TC-27: [SKIP] Merge across two NIBs (manual)
+  TC-28: [SKIP] Audio actually mixed between the parties (real handsets)
+  TC-29: A merge conference is recorded in conf_cdr.csv (CONF row + one LEG per member)
+  TC-30: A participant that pressed Merge still has one LEG row (leg swap folded)
+  TC-31: Call CDR - exactly one row per answered call, duration = talk time
+  TC-32: Call CDR - no row for unanswered calls or the conference-factory call
+  TC-33: Call CDR - a merged call's row ends at the merge
 
 Feature: FXO/FXS (--feature fxo_fxs)
   Temporarily disabled pending confirmed production call path
@@ -676,9 +745,9 @@ Feature: Interface Evidence (--feature interface_evidence)
   TC-8:  [REAL-HW] External S1/NAS/SIP pcap attachment
 
 ============================================================
-  Core suite:   22 features (default run)
+  Core suite:   24 features (default run)
   TRL8 add-on:  12 features (opt-in)
-  Total:        34 features; runtime summary reports exact test-case totals
+  Total:        36 features; runtime summary reports exact test-case totals
 ============================================================
 EOF
 }
@@ -699,6 +768,7 @@ Options:
 Available features:
   epc_health    Dedicated EPC/IMS health checks (20 TCs) - runs FIRST
   hss_auc       HSS/AUC authentication, SQN, and IMS AKA tests (10 TCs)
+  sim_algo      SIM auth algorithm (AUC.algo): XOR test algorithm, positive + negative (22 TCs)
   pdn_session   PDN session/APN/default-bearer tests (9 TCs)
   pyhss_api     PyHSS REST negative-input tests (10 TCs)
   attach_churn  Attach/detach lifecycle churn tests (9 TCs)
@@ -708,7 +778,8 @@ Available features:
   eir           PyHSS/EIR provisioning and verification tests (6 TCs)
   sms           SMS over IMS — intra/inter-NIB + store-and-forward (offline) tests (13 TCs)
   inter_nib     Inter-NIB infrastructure: I-CSCF routing, DNS, INVITE (8 TCs)
-  conference    Conference + conf-factory + inter-NIB + single 24-audio/8-video conference soak (15 TCs)
+  conference    Conference rooms via the complete UE path + inter-NIB + 24-audio/8-video soak + CDR content checks (15 TCs)
+  call_merge    Call merge via the OpenSIPS B2BUA: anchoring, merge, drop, join, negatives, conference CDR, call CDR (33 TCs)
   fxo_fxs       External SIP breakout / FXO-FXS path tests (5 TCs)
   mobile_ip     Same-IMS mobile-to-softphone tests (6 TCs)
   cdr           Call Detail Record tests (7 TCs)
@@ -942,7 +1013,7 @@ else
     # Run specific feature
     if ! run_feature_by_key "$FEATURE"; then
         echo "Unknown feature: $FEATURE"
-        echo "Available: epc_health, hss_auc, pdn_session, pyhss_api, attach_churn, regression, volte, vilte, eir, sms, inter_nib, conference, fxo_fxs, mobile_ip, cdr, load, mms, stress, bearer_qos, tec, advanced_sip, security, nas_conformance, scas_itsar, diameter_conformance, pfcp_n4, s1ap, ims_ng114, perf_kpi, ha_resilience, oam_fcaps, charging, li_presence, interface_evidence"
+        echo "Available: epc_health, hss_auc, sim_algo, pdn_session, pyhss_api, attach_churn, regression, volte, vilte, eir, sms, inter_nib, conference, call_merge, fxo_fxs, mobile_ip, cdr, load, mms, stress, bearer_qos, tec, advanced_sip, security, nas_conformance, scas_itsar, diameter_conformance, pfcp_n4, s1ap, ims_ng114, perf_kpi, ha_resilience, oam_fcaps, charging, li_presence, interface_evidence"
         exit 1
     fi
 fi

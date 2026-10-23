@@ -5,7 +5,7 @@
 Dockerized integration test suite for the 4G EPC + IMS (VoLTE/ViLTE) side of the
 docker_open5gs deployment.
 
-  Feature groups : 34  (22 core + 12 TRL8 opt-in)
+  Feature groups : 36  (24 core + 12 TRL8 opt-in)
   Test cases     : 403
   Last result    : 326 PASS / 1 FAIL / 76 SKIP  (--bundle all, 2026-07-06;
                    the 1 fail is a transient multi-UE reg timeout, passes on re-run)
@@ -78,10 +78,10 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
   sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle trl8
   sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle all
 
-  # Default core run (22 core features, no TRL8):
+  # Default core run (24 core features, no TRL8):
   sudo docker compose -f docker-compose.test.yaml run --rm sipp-test
 
-  # Complete suite (34 features / 403 TCs + comprehensive report; ~2h on the ref VM):
+  # Complete suite (36 features / 478 TCs + comprehensive report; ~2h on the ref VM):
   sudo docker compose -f docker-compose.test.yaml run --rm sipp-test --bundle all
 
 
@@ -105,10 +105,10 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
 --------------------------------------------------------------------------------
  5. FEATURE KEYS  (use with --feature <key>)
 --------------------------------------------------------------------------------
-  CORE (22) — default run / --bundle tec / --bundle all
-    epc_health(20)  hss_auc(12)  pdn_session(9)  pyhss_api(10)  attach_churn(9)
+  CORE (24) — default run / --bundle all  (--bundle tec: all but sim_algo, call_merge)
+    epc_health(20)  hss_auc(12)  sim_algo(22)  pdn_session(9)  pyhss_api(10)  attach_churn(9)
     regression(49)  volte(9)  vilte(11)  eir(6)  sms(13)  inter_nib(8)
-    conference(17)  fxo_fxs(5)  mobile_ip(6)  cdr(13)  load(14)  mms(18)
+    conference(15)  call_merge(33)  fxo_fxs(5)  mobile_ip(6)  cdr(13)  load(14)  mms(18)
     stress(8)  bearer_qos(10)  tec(13)  advanced_sip(5)  security(10)
 
   TRL8 (12) — opt-in: --feature <key> / --bundle trl8 / --bundle all
@@ -131,8 +131,8 @@ Note: "sudo" is shown throughout; omit it if your user is in the docker group.
 --------------------------------------------------------------------------------
  7. BUNDLES AT A GLANCE
 --------------------------------------------------------------------------------
-  (no arg)        22 core features                       dev/deploy smoke
+  (no arg)        24 core features                       dev/deploy smoke
   --bundle tec    22 core + TEC gap matrix               automated evidence pack
   --bundle trl8   12 TRL8 features only                  conformance/assurance
-  --bundle all    34 features + comprehensive report     full release validation
+  --bundle all    36 features + comprehensive report     full release validation
 ================================================================================

@@ -237,7 +237,7 @@ run_sim_algo_tests() {
     if docker exec pyhss sh -c "test -f /pyhss/lib/xor_auth.py && grep -q 'get_auth_algo' /pyhss/lib/S6a_crypt.py && grep -q 'algo=algo' /pyhss/lib/database.py" 2>/dev/null; then
         xor_image=true
     else
-        xor_image_detail="PyHSS image has no XOR support (lib/xor_auth.py / S6a_crypt dispatch / database algo pass-through missing) - rebuild pyhss with pyhss/patches/0001-xor-test-algorithm.patch"
+        xor_image_detail="PyHSS image has no XOR support (lib/xor_auth.py / S6a_crypt dispatch / database algo pass-through missing) - rebuild pyhss from a fork commit that has the XOR change (pin it in pyhss/Dockerfile)"
     fi
 
     # Fresh subscribers for this run

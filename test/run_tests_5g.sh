@@ -406,21 +406,17 @@ Feature: MMS over 5GS (--feature mms_5g)
   TC-18: Inter-NIB MMS MM7 outbound
 
 Feature: Conference (5G VoNR) (--feature conference_5g)
-  TC-1:  DNS conf-factory resolution
-  TC-2:  1-UE audio VoNR conference — COMPLETE path (room 1010, N-in-N CDR)
-  TC-3:  P-CSCF VoNR conf-factory routing
-  TC-4:  1-UE video ViNR conference — COMPLETE path (room 1011, N-in-N CDR)
-  TC-5:  P-CSCF video conf-factory routing
-  TC-6:  Sequential conf-factory rooms
-  TC-7:  4-UE audio VoNR conference — COMPLETE path (room 1012, N-in-N CDR)
-  TC-8:  Hold SDP via conf-factory
-  TC-9:  Conference room reuse — COMPLETE path (room 1013)
-  TC-10: Distinct conference rooms + CDR isolation — COMPLETE path (1014, 1015)
-  TC-11: PCF N5 QoS policy path for IMS sessions
-  TC-12: PCF N5 SBI interface reachability
-  TC-13: Inter-NIB conference INVITE (external domain)
-  TC-14: 24-UE SINGLE audio (VoNR) conference — COMPLETE path (room 1016); 24 UEs ⇒ exactly 24 conf_cdr LEG rows
-  TC-15: 8-UE  SINGLE video (ViNR) conference — COMPLETE path (room 1017); 8 UEs ⇒ exactly 8 conf_cdr LEG rows
+  TC-1:  1-UE audio VoNR conference — COMPLETE path (room 1010, N-in-N CDR)
+  TC-2:  1-UE video ViNR conference — COMPLETE path (room 1011, N-in-N CDR)
+  TC-3:  4-UE audio VoNR conference — COMPLETE path (room 1012, N-in-N CDR)
+  TC-4:  Conference room reuse — COMPLETE path (room 1013)
+  TC-5:  Distinct conference rooms + CDR isolation — COMPLETE path (1014, 1015)
+  TC-6:  PCF N5 QoS policy path for IMS sessions
+  TC-7:  PCF N5 SBI interface reachability
+  TC-8:  Inter-NIB conference INVITE (external domain)
+  TC-9:  24-UE SINGLE audio (VoNR) conference — COMPLETE path (room 1016); 24 UEs ⇒ exactly 24 conf_cdr LEG rows
+  TC-10: 8-UE  SINGLE video (ViNR) conference — COMPLETE path (room 1017); 8 UEs ⇒ exactly 8 conf_cdr LEG rows
+  (the former conf-factory SIPp cases were removed; merge is covered by the 4G feature call_merge)
 
 Feature: Advanced SIP (5G VoNR) (--feature advanced_sip_5g)
   TC-1:  RTP echo — UAC with -rtp_echo to FreeSWITCH (real media loopback)
@@ -657,7 +653,7 @@ Available features:
   load_5g        Load, throughput & capacity tests, 4G-parity (20 TCs)
   security_5g    Security posture — SBI + IMS (14 TCs)
   mms_5g         MMS over 5GS (Kannel + Mbuni via PDU session) (18 TCs)
-  conference_5g  Conference over VoNR/ViNR — FreeSWITCH + P-CSCF + single 24-audio/8-video soak (15 TCs)
+  conference_5g  Conference over VoNR/ViNR — complete UE path + PCF N5 + single 24-audio/8-video soak (10 TCs)
   advanced_sip_5g Advanced SIP: RTP echo, REFER, emergency, IPv6 (5 TCs)
   stress_5g      Stress/stability: P-CSCF load, in-dialog AAR (9 TCs)
   video_vonr     Video over NR (ViNR): IMS video path (10 TCs)

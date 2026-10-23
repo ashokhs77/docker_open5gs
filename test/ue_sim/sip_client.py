@@ -29,11 +29,12 @@ from urllib.parse import quote, unquote
 
 from .config import Config
 from .milenage import Milenage
+from .sip_supplementary import SupplementaryMixin
 
 logger = logging.getLogger(__name__)
 
 
-class SIPClient:
+class SIPClient(SupplementaryMixin):
     """
     SIP User Agent for IMS registration and VoLTE/ViLTE calls.
 
@@ -1064,7 +1065,15 @@ class SIPClient:
                     remote_tag = self._extract_tag(self._extract_header(response, "To") or "")
                     contact = self._extract_header(response, "Contact") or ""
                     remote_target = self._extract_uri(contact) or target_uri
-                    route_set = self._extract_record_routes(response) or route_set
+                    # RFC 3261 12.1.2: the CALLER's route set is the Record-Route list of
+                    # the 2xx in REVERSE order (the callee keeps the order of the INVITE).
+                    # Taken unreversed, the first hop named the S-CSCF and the P-CSCF came
+                    # second, so the P-CSCF sent the caller's in-dialog requests straight to
+                    # the far end and the S-CSCF never saw them (found 2026-10-09: merge
+                    # REFER invisible to the S-CSCF, roster SUBSCRIBE answered 500).
+                    record_routes = self._extract_record_routes(response)
+                    if record_routes:
+                        route_set = list(reversed(record_routes))
                     dialog = {
                         "call_id": call_id,
                         "local_tag": local_tag,
@@ -1195,9 +1204,8 @@ class SIPClient:
                 contact = self._extract_header(response, "Contact") or ""
                 if contact:
                     dialog["remote_target"] = self._extract_uri(contact)
-                route_set = self._extract_record_routes(response)
-                if route_set:
-                    dialog["route_set"] = route_set
+                # The route set is fixed when the dialog is established (RFC 3261
+                # 12.2.1.2): a re-INVITE's 200 refreshes the remote target only.
                 ack = self._build_ack(
                     target_uri=dialog["remote_target"] or dialog["target_uri"],
                     call_id=dialog["call_id"],
@@ -1711,8 +1719,10 @@ class SIPClient:
         msg = f"BYE {target_uri} SIP/2.0\r\n"
         msg += f"Via: SIP/2.0/UDP {self._local_ip}:{self._local_port};branch={branch};rport\r\n"
 
-        # Reverse route set for BYE
-        for route in reversed(route_set):
+        # The dialog's route set, in order - as for every other in-dialog request.
+        # (It used to be reversed here, which only compensated, for callers and for
+        # BYE alone, for the route set having been stored unreversed.)
+        for route in route_set:
             msg += f"Route: {route}\r\n"
 
         msg += f"Max-Forwards: 70\r\n"

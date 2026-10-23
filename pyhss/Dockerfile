@@ -48,7 +48,7 @@ RUN apt-get update && \
 RUN git init /src/pyhss && \
     cd /src/pyhss && \
     git remote add origin https://github.com/ashokhs77/pyhss && \
-    git fetch --depth 1 origin 682e6adf135a2647d2c84a4924593aa8910c79d5 && \
+    git fetch --depth 1 origin 04278dd0cf9dc9f5c3d800cf62707513cf720893 && \
     git checkout FETCH_HEAD && \
     python3 -m py_compile lib/database.py && \
     python3 -m py_compile lib/diameter.py && \
@@ -58,7 +58,9 @@ RUN git init /src/pyhss && \
     grep -Fq '[SERVING_APN_STATE] action=STALE_DELETE_IGNORED' lib/database.py && \
     grep -Fq '[RX_IDENTITY] source=framed-ip' lib/diameter.py && \
     grep -Fq '[RX_IDENTITY] source=subscription-id' lib/diameter.py && \
-    grep -Fq 'validation=preloaded' lib/diameter.py
+    grep -Fq 'validation=preloaded' lib/diameter.py && \
+    python3 -m py_compile lib/S6a_crypt.py lib/xor_auth.py services/apiService.py && \
+    grep -Fq 'get_auth_algo' lib/S6a_crypt.py
 
 RUN sed -E 's/^mysqlclient([<>= ].*)?$/mysqlclient==2.1.1/' \
         /src/pyhss/requirements.txt > /tmp/pyhss-requirements.txt && \
@@ -71,6 +73,7 @@ RUN sed -E 's/^mysqlclient([<>= ].*)?$/mysqlclient==2.1.1/' \
         python3 -c "import runpy; runpy.run_path('tests/test_serving_apn_lifecycle.py')['test_serving_apn_atomic_lifecycle']()" && \
     PYTHONPATH=/opt/pyhss-python:/src/pyhss/lib \
         python3 -c "import runpy; runpy.run_path('tests/test_rx_identity_resolution.py')['test_rx_identity_resolution']()" && \
+    PYTHONPATH=/opt/pyhss-python:/src/pyhss/lib python3 -m unittest tests.test_xor_auth && \
     find /opt/pyhss-python -type d -name '__pycache__' -prune -exec rm -rf {} +
 
 FROM ubuntu:jammy
