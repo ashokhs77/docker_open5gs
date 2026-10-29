@@ -55,7 +55,7 @@ RUN mkdir -p /usr/local/src/ && cd /usr/local/src/ && \
 	git init kamailio && \
 	cd kamailio && \
 	git remote add origin https://github.com/ganeshsskumar/kamailio && \
-	git fetch --depth 1 origin ba12e7aad3138b41c22644ace3b6c79940d9b77e && \
+	git fetch --depth 1 origin a3a2f9a83cb1fdf421b4d757fb63417afeeee9ad && \
 	git checkout FETCH_HEAD
 
 # Build and Install Kamailio

@@ -60,6 +60,20 @@ fi
 # never works. CREATE ... IF NOT EXISTS is idempotent and safe on every start
 # (the persistent MySQL volume means a rebuild/reboot alone will NOT create it).
 mysql -u root -h ${MYSQL_IP} smsc -e "CREATE TABLE IF NOT EXISTS pending_ue (callee VARCHAR(64) NOT NULL, UNIQUE KEY unique_callee (callee));"
+mysql -u root -h ${MYSQL_IP} smsc -e "CREATE TABLE IF NOT EXISTS subscribed_ue (callee VARCHAR(64) NOT NULL, uri VARCHAR(255) NOT NULL, subscribed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (callee));"
+
+# Delivery-report support: same rationale as pending_ue above - this DB
+# already existed before the feature was added, so the SMS_SCHEMA_READY
+# gate above will never re-run smsc-create.sql to pick it up. Applied
+# unconditionally, every start, idempotently.
+mysql -u root -h ${MYSQL_IP} smsc -e "CREATE TABLE IF NOT EXISTS pending_reports (id INT PRIMARY KEY, caller VARCHAR(20) NOT NULL, callee VARCHAR(20) NOT NULL, orig_mr INT NOT NULL, submitted_at DATETIME NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+
+SRR_COLUMN_READY=`mysql -u root -h ${MYSQL_IP} -s -N -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='smsc' AND table_name='messages' AND column_name='srr';"`
+if [[ "$SRR_COLUMN_READY" -lt 1 ]]
+then
+	mysql -u root -h ${MYSQL_IP} smsc -e "ALTER TABLE messages ADD COLUMN srr TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN orig_mr INT NOT NULL DEFAULT 0;"
+fi
+
 mysql -u root -h ${MYSQL_IP} -e "CREATE USER IF NOT EXISTS 'smsc'@'%' IDENTIFIED WITH mysql_native_password BY 'heslo';"
 mysql -u root -h ${MYSQL_IP} -e "CREATE USER IF NOT EXISTS 'smsc'@'$SMSC_IP' IDENTIFIED WITH mysql_native_password BY 'heslo';"
 mysql -u root -h ${MYSQL_IP} -e "GRANT ALL ON smsc.* TO 'smsc'@'%';"
@@ -70,7 +84,7 @@ sed -i 's|SMSC_IP|'$SMSC_IP'|g' /etc/kamailio_smsc/smsc.cfg
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_smsc/smsc.cfg
 sed -i 's|MYSQL_IP|'$MYSQL_IP'|g' /etc/kamailio_smsc/smsc.cfg
 sed -i 's|DOCKER_HOST_IP|'$DOCKER_HOST_IP'|g' /etc/kamailio_smsc/smsc.cfg
-
+sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_smsc/smsc.cfg
 mkdir -p /var/run/kamailio_smsc
 rm -f /kamailio_smsc.pid
 
@@ -86,4 +100,7 @@ exec kamailio -f /etc/kamailio_smsc/kamailio_smsc.cfg -P /kamailio_smsc.pid -DD 
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+
+
 

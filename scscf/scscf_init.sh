@@ -80,6 +80,7 @@ sed -i 's|SCSCF_IP|'$SCSCF_IP'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|PCSCF_IP|'$PCSCF_IP'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|ICSCF_IP|'$ICSCF_IP'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|REGISTRATION_EXPIRES_ENV|'$REGISTRATION_EXPIRES_ENV'|g' /etc/kamailio_scscf/scscf.cfg
+sed -i 's|IMS_AUTH_VECTOR_TIMEOUT_ENV|'$IMS_AUTH_VECTOR_TIMEOUT_ENV'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|IMS_DOMAIN|'$IMS_DOMAIN'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|IMS_SLASH_DOMAIN|'$IMS_SLASH_DOMAIN'|g' /etc/kamailio_scscf/scscf.cfg
 sed -i 's|MYSQL_IP|'$MYSQL_IP'|g' /etc/kamailio_scscf/scscf.cfg
@@ -112,3 +113,6 @@ exec kamailio -f /etc/kamailio_scscf/kamailio_scscf.cfg -P /kamailio_scscf.pid -
 
 # Sync docker time
 #ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+
+
