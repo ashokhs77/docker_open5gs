@@ -42,10 +42,10 @@ RUN apt-get update && \
         wget && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Golang
-RUN rm -rf /usr/local/go && wget https://go.dev/dl/go1.22.4.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go1.22.4.linux-amd64.tar.gz && \
-    rm -f go1.22.4.linux-amd64.tar.gz
+# Install Golang (eUPF v0.7.2 needs Go 1.26)
+RUN rm -rf /usr/local/go && wget https://go.dev/dl/go1.26.10.linux-amd64.tar.gz && \
+    tar -C /usr/local -xzf go1.26.10.linux-amd64.tar.gz && \
+    rm -f go1.26.10.linux-amd64.tar.gz
 
 ENV PATH="/usr/local/go/bin:${PATH}"
 
@@ -53,8 +53,9 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
 
 # Get eupf, compile and install
+# v0.7.2 is the first release that strips GTP for Outer Header Removal 6, which the Open5GS SMF always sends
 RUN export PATH=$(go env GOPATH)/bin:${PATH} && \
-    git clone --depth 1 --branch v0.6.4 https://github.com/edgecomllc/eupf.git /eupf && \
+    git clone --depth 1 --branch v0.7.2 https://github.com/edgecomllc/eupf.git /eupf && \
     cd /eupf && \
     go generate -v ./cmd/... && \
     go build -trimpath -ldflags="-s -w" -v -o bin/eupf ./cmd/
@@ -66,8 +67,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
         ca-certificates \
+        ethtool \
         ifupdown \
         iperf \
+        iperf3 \
         iproute2 \
         iptables \
         iputils-ping \

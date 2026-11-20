@@ -155,7 +155,14 @@ set +e
 # Add static route to route traffic back to UE as there is not NATing
 ip r add ${UE_IPV4_IMS} via ${UPF_IP}
 # Route needed for VoWiFi client where internet APN is used
-ip r add ${UE_IPV4_INTERNET} via ${UPF_IP}
+# (sa-vonr-eupf-deploy.yaml sets INTERNET_UPF_IP: that pool then lives on the eUPF)
+ip r replace ${UE_IPV4_INTERNET} via ${INTERNET_UPF_IP:-$UPF_IP}
+# eUPF does no NAT, so masquerade its pool out of the host's default interface
+if [ -n "$INTERNET_UPF_IP" ]; then
+	WAN_IF=$(ip r | awk '/^default/ { print $5; exit }')
+	iptables -t nat -C POSTROUTING -s ${UE_IPV4_INTERNET} -o $WAN_IF -j MASQUERADE 2>/dev/null || \
+		iptables -t nat -A POSTROUTING -s ${UE_IPV4_INTERNET} -o $WAN_IF -j MASQUERADE
+fi
 
 exec $RUNTIME $OPTIONS
 

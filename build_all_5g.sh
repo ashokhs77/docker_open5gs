@@ -35,13 +35,13 @@ set -euo pipefail
 # [OPT-1] Enable BuildKit for all docker build invocations
 export DOCKER_BUILDKIT=1
 
-COMPOSE_FILE="sa-vonr-deploy.yaml"
+COMPOSE_FILE="sa-vonr-eupf-deploy.yaml"
 
 # Services in sa-vonr-deploy.yaml that have a build: context (DEPLOYMENT infra).
 # IMPORTANT: mongo and all open5gs/kamailio NFs use pre-built images, not listed here.
 # webui is included — 5G-SA only, needed for MongoDB subscriber provisioning.
 # osmohlr/osmomsc are intentionally EXCLUDED (4G-only circuit-switched components).
-COMPOSE_BUILD_SERVICES="${COMPOSE_BUILD_SERVICES:-webui dns rtpengine freeswitch mysql pyhss mmsc metrics}"
+COMPOSE_BUILD_SERVICES="${COMPOSE_BUILD_SERVICES:-webui dns rtpengine freeswitch mysql pyhss mmsc metrics osmohlr osmomsc opensips eupf}"
 
 show_help() {
     cat <<'EOF'

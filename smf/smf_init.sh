@@ -45,6 +45,12 @@ fi
 cp /mnt/smf/smf.conf install/etc/freeDiameter
 cp /mnt/smf/make_certs.sh install/etc/freeDiameter
 
+# sa-vonr-eupf-deploy.yaml sets INTERNET_UPF_IP: the internet DNN goes to the eUPF and the
+# ims DNN stays on the Open5GS UPF. Both entries need a dnn, or the SMF round-robins them.
+if [ -n "$INTERNET_UPF_IP" ]; then
+    sed -i 's|^\( *\)- address: UPF_IP$|&\n\1  dnn: ims\n\1- address: '$INTERNET_UPF_IP'\n\1  dnn: internet|' install/etc/open5gs/smf.yaml
+fi
+
 sed -i 's|SMF_IP|'$SMF_IP'|g' install/etc/open5gs/smf.yaml
 sed -i 's|SCP_IP|'$SCP_IP'|g' install/etc/open5gs/smf.yaml
 sed -i 's|NRF_IP|'$NRF_IP'|g' install/etc/open5gs/smf.yaml

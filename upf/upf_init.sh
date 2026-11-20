@@ -62,6 +62,11 @@ UE_IPV4_INTERNET_APN_GATEWAY_IP=$(python3 /mnt/upf/ip_utils.py --ip_range $UE_IP
 UE_IPV4_IMS_TUN_IP=$(python3 /mnt/upf/ip_utils.py --ip_range $UE_IPV4_IMS)
 
 cp /mnt/upf/upf.yaml install/etc/open5gs
+# sa-vonr-eupf-deploy.yaml sets INTERNET_UPF_IP: this UPF then shares the eUPF's N3 address,
+# and the top TEID bit (0x80000000) keeps its TEIDs apart from the eUPF's small ones
+if [ -n "$INTERNET_UPF_IP" ]; then
+    sed -i 's|^\( *\)advertise: UPF_ADVERTISE_IP$|&\n\1teid_range_indication: 1\n\1teid_range: 1|' install/etc/open5gs/upf.yaml
+fi
 sed -i 's|UPF_IP|'$UPF_IP'|g' install/etc/open5gs/upf.yaml
 sed -i 's|SMF_IP|'$SMF_IP'|g' install/etc/open5gs/upf.yaml
 sed -i 's|UE_IPV4_INTERNET_APN_GATEWAY_IP|'$UE_IPV4_INTERNET_APN_GATEWAY_IP'|g' install/etc/open5gs/upf.yaml
