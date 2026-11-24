@@ -63,6 +63,8 @@ services:
     environment:
       - COMPONENT_NAME=nrf
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./nrf:/mnt/nrf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -82,6 +84,8 @@ services:
     environment:
       - COMPONENT_NAME=scp
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./scp:/mnt/scp
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -102,6 +106,8 @@ services:
     environment:
       - COMPONENT_NAME=ausf
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./ausf:/mnt/ausf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -123,6 +129,8 @@ services:
     environment:
       - COMPONENT_NAME=udr
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./udr:/mnt/udr
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -143,6 +151,8 @@ services:
     environment:
       - COMPONENT_NAME=udm
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./udm:/mnt/udm
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -167,6 +177,8 @@ services:
       # eUPF: internet DNN / UE pool on the eUPF
       - INTERNET_UPF_IP=${EUPF_IP}
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./smf:/mnt/smf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -199,6 +211,8 @@ services:
       - UPF_ADVERTISE_IP=${EUPF_N3_IP}
       - INTERNET_UPF_IP=${EUPF_IP}
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./upf:/mnt/upf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -269,6 +283,8 @@ services:
       - COMPONENT_NAME=amf
       - AMF_UNAUTHORIZED_REGISTRATION_CSV=${AMF_UNAUTHORIZED_REGISTRATION_CSV:-/open5gs/install/var/log/open5gs/unauthorized_registration_attempts.csv}
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./amf:/mnt/amf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -294,6 +310,8 @@ services:
     environment:
       - COMPONENT_NAME=pcf
     volumes:
+#     - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./pcf:/mnt/pcf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -316,6 +334,8 @@ services:
     environment:
       - COMPONENT_NAME=bsf
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./bsf:/mnt/bsf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -337,6 +357,8 @@ services:
     environment:
       - COMPONENT_NAME=nssf
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./nssf:/mnt/nssf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro

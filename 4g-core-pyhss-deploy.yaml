@@ -25,6 +25,8 @@ services:
     environment:
       - COMPONENT_NAME=sgwc
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./sgwc:/mnt/sgwc
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -46,6 +48,8 @@ services:
     environment:
       - COMPONENT_NAME=sgwu
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./sgwu:/mnt/sgwu
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -67,6 +71,8 @@ services:
       - COMPONENT_NAME=smf
       - DEPLOY_MODE=4G
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./smf:/mnt/smf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
@@ -96,6 +102,8 @@ services:
     environment:
       - COMPONENT_NAME=upf
     volumes:
+#      - /usr/lib64/libLwsLicenseCheck.so:/usr/lib64/libLwsLicenseCheck.so:ro
+#      - /usr/local/License_LWS_CORE:/usr/local/License_LWS_CORE:ro
       - ./upf:/mnt/upf
       - ./log:/open5gs/install/var/log/open5gs
       - /etc/timezone:/etc/timezone:ro
