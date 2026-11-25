@@ -87,7 +87,8 @@ RUN git init open5gs && cd open5gs && \
     git submodule update --init --recursive --depth 1 && \
     if [ "$LICENSE" = "OFF" ]; then \
         echo "Disabling MME License"; \
-        sed -i "s/, *'-DENABLE_LICENSE_CHECK'//g" src/mme/meson.build; \
+         grep -rl --include=meson.build ENABLE_LICENSE_CHECK src/ | xargs -r sed -i "s/, *'-DENABLE_LICENSE_CHECK'//g"; \
+         ! grep -rn --include=meson.build ENABLE_LICENSE_CHECK src/; \
     else \
         echo "MME License Enabled"; \
     fi && \

@@ -1,0 +1,8 @@
+# IMSI and MSISDN, one subscriber per line (space or comma between them).
+# Ki/OPc/AMF/APNs are fixed in subscriber.sh. Lines starting with # are ignored.
+#
+#   bash subscriber.sh        -> adds everyone below (ones already in PyHSS are skipped)
+#   bash subscriber.sh del    -> deletes everyone below
+#
+# IMSI           MSISDN
+001010100008004  9876548004
